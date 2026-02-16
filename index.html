@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
-        <img src="mobius-logo.png" alt="Mobius Logo" style="height: 50px;">
-        <h1 style="margin: 0; font-size: 59px;">Mobius</h1>
-    </div>
+    <title>Mobius</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="Mobius">
     <style>
         body { 
             font-family: 'Century Gothic', 'Avenir', 'Segoe UI', 'Verdana', sans-serif; 
@@ -57,6 +59,11 @@
                 .replace(/```([^`]+)```/g, '<pre><code>$1</code></pre>')
                 .replace(/`([^`]+)`/g, '<code>$1</code>')
                 .replace(/\n/g, '<br>');
+        }
+    </script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/service-worker.js');
         }
     </script>
 </body>
