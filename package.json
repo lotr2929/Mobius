@@ -1,0 +1,22 @@
+{
+  "name": "mobius",
+  "version": "1.0.0",
+  "description": "Mobius — a local, user-space AI desktop",
+  "main": "main.js",
+  "type": "module",
+  "scripts": {
+    "start": "electron .",
+    "dev": "set ELECTRON_DISABLE_SECURITY_WARNINGS=1 && electron .",
+    "test": "node tests/run-all.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "electron": "^40.1.0",
+    "express": "^5.2.1",
+    "mime-types": "^3.0.2",
+    "node-fetch": "^2.7.0",
+    "ws": "^8.19.0"
+  }
+}
