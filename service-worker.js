@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mobius-v3';
+const CACHE_NAME = 'mobius-v5';
 const urlsToCache = [
   '/',
   '/index.html',
