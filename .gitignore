@@ -1,6 +1,0 @@
-node_modules/
-
-# Local config files
-.safeq6/
-backup/
-*.original.js

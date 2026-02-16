@@ -1,272 +1,37 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8"/>
-  <title>Mobius</title>
-  <style>
-    body {
-      font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      margin: 0;
-      padding: 0;
-      background: #F5F2E8;
-      color: #3D3D3D;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-    
-    .container {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      max-width: 1200px;
-      margin: 0 auto;
-      width: 100%;
-      padding: 20px;
-      box-sizing: border-box;
-    }
-    
-    .chat-container {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      background: #FFF8E7;
-      border: 1px solid #E8E0D4;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 4px 20px rgba(139, 119, 101, 0.15);
-    }
-    
-    .messages {
-      flex: 1;
-      padding: 24px;
-      overflow-y: auto;
-      font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 14px;
-      line-height: 1.7;
-      background: #FFF8E7;
-    }
-    
-    .message {
-      margin-bottom: 20px;
-      padding: 20px;
-      border-radius: 10px;
-      background: #FFFFFF;
-    }
-    
-    .user-message {
-      background: #FFFFFF;
-    }
-    
-    .ai-message {
-      background: #FFFFFF;
-    }
-    
-    .model-label {
-      font-family: 'Inter', 'SF Pro Display', sans-serif;
-      font-size: 11px;
-      color: #8B7355;
-      margin-bottom: 10px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    
-    .input-container {
-      display: flex;
-      padding: 24px;
-      background: #FFF8E7;
-      border-top: 1px solid #E8E0D4;
-    }
-    
-    #prompt {
-      flex: 1;
-      padding: 18px;
-      border: 2px solid #E8E0D4;
-      border-radius: 10px;
-      background: #FFFFFF;
-      color: #3D3D3D;
-      font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 14px;
-      resize: vertical;
-      min-height: 24px;
-      max-height: 120px;
-      transition: all 0.3s ease;
-    }
-    
-    #prompt:focus {
-      outline: none;
-      border-color: #A67C52;
-    }
-    
-    #prompt::placeholder {
-      color: #A67C52;
-      opacity: 0.7;
-    }
-    
-    .actions {
-      display: flex;
-      gap: 16px;
-      margin-left: 16px;
-      align-items: flex-start;
-    }
-    
-    button {
-      padding: 18px 28px;
-      border: none;
-      border-radius: 10px;
-      background: #A67C52;
-      color: #FFFFFF;
-      cursor: pointer;
-      font-family: 'Inter', 'SF Pro Display', sans-serif;
-      font-size: 14px;
-      font-weight: 600;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 12px rgba(166, 124, 82, 0.25);
-    }
-    
-    button:hover {
-      background: #8B6F47;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(166, 124, 82, 0.35);
-    }
-    
-    button:active {
-      transform: translateY(0);
-      box-shadow: 0 2px 8px rgba(166, 124, 82, 0.25);
-    }
-    
-    button:disabled {
-      background: #D4C4B0;
-      color: #8B7355;
-      cursor: not-allowed;
-      transform: none;
-      box-shadow: none;
-    }
-    
-    #clear {
-      background: #B85C5C;
-    }
-    
-    #clear:hover {
-      background: #9B4A4A;
-    }
-    
-    .status {
-      padding: 14px 24px;
-      background: #A67C52;
-      color: #FFFFFF;
-      font-family: 'Inter', 'SF Pro Display', sans-serif;
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      border-top: 1px solid #E8E0D4;
-    }
-    
-    /* Scrollbar styling */
-    .messages::-webkit-scrollbar {
-      width: 14px;
-    }
-    
-    .messages::-webkit-scrollbar-track {
-      background: #FFF8E7;
-      border-radius: 7px;
-    }
-    
-    .messages::-webkit-scrollbar-thumb {
-      background: #D4C4B0;
-      border-radius: 7px;
-      border: 3px solid #FFF8E7;
-    }
-    
-    .messages::-webkit-scrollbar-thumb:hover {
-      background: #C4B5A0;
-    }
-    
-    /* Selection styling */
-    ::selection {
-      background: #A67C52;
-      color: #FFFFFF;
-    }
-    
-    /* Focus ring */
-    button:focus-visible {
-      outline: 3px solid #A67C52;
-      outline-offset: 2px;
-    }
-    
-    /* Markdown styling */
-    .message h1, .message h2, .message h3 {
-      margin: 16px 0 8px 0;
-      color: #3D3D3D;
-      font-weight: 600;
-    }
-    
-    .message h1 { font-size: 18px; }
-    .message h2 { font-size: 16px; }
-    .message h3 { font-size: 14px; }
-    
-    .message strong {
-      font-weight: 600;
-      color: #3D3D3D;
-    }
-    
-    .message em {
-      font-style: italic;
-      color: #5D5D5D;
-    }
-    
-    .message code {
-      background: #F0E6D2;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 13px;
-      color: #8B6F47;
-    }
-    
-    .message pre {
-      background: #F0E6D2;
-      padding: 12px;
-      border-radius: 8px;
-      margin: 12px 0;
-      overflow-x: auto;
-      border-left: 3px solid #A67C52;
-    }
-    
-    .message pre code {
-      background: none;
-      padding: 0;
-      color: #3D3D3D;
-      font-size: 13px;
-    }
-    
-    .message ul, .message ol {
-      margin: 8px 0;
-      padding-left: 20px;
-    }
-    
-    .message li {
-      margin: 4px 0;
-      color: #3D3D3D;
-    }
-  </style>
+    <title>Mobius Test</title>
+    <style>
+        body { font-family: Arial; padding: 40px; max-width: 600px; margin: 0 auto; }
+        input { width: 100%; padding: 10px; font-size: 16px; }
+        button { padding: 10px 20px; margin-top: 10px; font-size: 16px; }
+        #response { margin-top: 20px; padding: 20px; background: #f0f0f0; white-space: pre-wrap; }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <div class="chat-container">
-      <div id="messages" class="messages"></div>
-      <div class="input-container">
-        <textarea id="prompt" placeholder="Ask something..." rows="1"></textarea>
-        <div class="actions">
-          <button id="ask">Ask</button>
-          <button id="clear">Clear</button>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div id="status" class="status">Ready</div>
-  <script src="renderer.js"></script>
+    <h1>Mobius Test</h1>
+    <input id="input" type="text" placeholder="Ask something...">
+    <button onclick="ask()">Ask</button>
+    <div id="response"></div>
+    
+    <script>
+        async function ask() {
+            const text = document.getElementById('input').value;
+            document.getElementById('response').textContent = 'Thinking...';
+            
+            try {
+                const res = await fetch('/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+                const data = await res.json();
+                document.getElementById('response').textContent = data.reply || data.error;
+            } catch (err) {
+                document.getElementById('response').textContent = 'Error: ' + err.message;
+            }
+        }
+    </script>
 </body>
 </html>
