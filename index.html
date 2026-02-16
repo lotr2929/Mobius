@@ -20,7 +20,10 @@
     <script>
         async function ask() {
             const text = document.getElementById('input').value;
-            document.getElementById('response').textContent = 'Thinking...';
+            const responseDiv = document.getElementById('response');
+            
+            // Show model label and "thinking"
+            responseDiv.innerHTML = '<strong>Groq (Llama 3.3 70B)</strong><br><br>Thinking...';
             
             try {
                 const res = await fetch('/ask', {
@@ -29,10 +32,26 @@
                     body: JSON.stringify({ text })
                 });
                 const data = await res.json();
-                document.getElementById('response').textContent = data.reply || data.error;
+                
+                // Convert markdown to HTML
+                const htmlContent = markdownToHtml(data.reply || data.error);
+                responseDiv.innerHTML = '<strong>Groq (Llama 3.3 70B)</strong><br><br>' + htmlContent;
             } catch (err) {
-                document.getElementById('response').textContent = 'Error: ' + err.message;
+                responseDiv.innerHTML = '<strong>Error</strong><br><br>' + err.message;
             }
+        }
+
+        // Simple markdown to HTML converter
+        function markdownToHtml(text) {
+            return text
+                .replace(/### (.*$)/gim, '<h3>$1</h3>')
+                .replace(/## (.*$)/gim, '<h2>$1</h2>')
+                .replace(/# (.*$)/gim, '<h1>$1</h1>')
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                .replace(/```([^`]+)```/g, '<pre><code>$1</code></pre>')
+                .replace(/`([^`]+)`/g, '<code>$1</code>')
+                .replace(/\n/g, '<br>');
         }
     </script>
 </body>
