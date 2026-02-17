@@ -4,42 +4,41 @@
     <title>Mobius</title>
     <link rel="icon" type="image/png" href="mobius-logo.png">
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#A67C52">
+    <meta name="theme-color" content="#667eea">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
-    <meta name="apple-mobile-web-app-title" content="Mobius">
+    <meta name="apple-mobile-web-app-title" content="Mobius PWA">
     <style>
         body { 
             font-family: 'Century Gothic', 'Avenir', 'Segoe UI', 'Verdana', sans-serif; 
             padding: 20px; 
             max-width: 700px; 
             margin: 0 auto;
-            background: #F5F2E8;
+            background: #f5f2e8;
         }
         textarea { 
             width: 100%; 
             padding: 12px; 
             font-size: 16px; 
-            border: 2px solid #D4C4B0;
+            border: 1px solid #d4c4b0;
             border-radius: 8px;
             box-sizing: border-box;
             font-family: 'Century Gothic', 'Avenir', 'Segoe UI', 'Verdana', sans-serif;
             resize: vertical;
             min-height: 60px;
-            background: #FFF8E7;
         }
         button { 
             padding: 12px 24px; 
             margin-top: 10px; 
             font-size: 16px;
-            background: #A67C52;
+            background: #a67c52;
             color: white;
             border: none;
             border-radius: 8px;
             cursor: pointer;
         }
         button:hover {
-            background: #8B6F47;
+            background: #8b6f47;
         }
         #response { 
             margin-top: 20px; 
@@ -53,30 +52,21 @@
     </style>
 </head>
 <body>
-    <div style="text-align: center; margin-bottom: 30px;">
+    <div style="text-align: center; margin-bottom: 10px;">
         <img src="mobius-logo.png" alt="Mobius" style="height: 60px;">
-        <h1 style="margin: 10px 0 0 0; font-size: 48px; color: #3D3D3D;">Mobius</h1>
+        <h1 style="margin: 0; font-size: 60px;">Mobius PWA</h1>
     </div>
-    
     <textarea id="input" placeholder="Ask something..." rows="3"></textarea>
     <button onclick="ask()">Ask</button>
     <div id="response"></div>
     
     <script>
-        // Auto-expand textarea
-        document.addEventListener('DOMContentLoaded', () => {
-            const textarea = document.getElementById('input');
-            textarea.addEventListener('input', () => {
-                textarea.style.height = 'auto';
-                textarea.style.height = textarea.scrollHeight + 'px';
-            });
-        });
-
         async function ask() {
             const text = document.getElementById('input').value;
             const responseDiv = document.getElementById('response');
             
-            responseDiv.innerHTML = '<strong>Groq (Llama 3.3 70B)</strong><br><br>Thinking...';
+            // Show model label and "thinking"
+            responseDiv.innerHTML = '<strong>Groq (Llama 3.3 70B):</strong><br><br>Thinking...';
             
             try {
                 const res = await fetch('/ask', {
@@ -86,6 +76,7 @@
                 });
                 const data = await res.json();
                 
+                // Convert markdown to HTML
                 const htmlContent = markdownToHtml(data.reply || data.error);
                 responseDiv.innerHTML = '<strong>Groq (Llama 3.3 70B)</strong><br><br>' + htmlContent;
             } catch (err) {
@@ -93,6 +84,7 @@
             }
         }
 
+        // Simple markdown to HTML converter
         function markdownToHtml(text) {
             return text
                 .replace(/### (.*$)/gim, '<h3>$1</h3>')
