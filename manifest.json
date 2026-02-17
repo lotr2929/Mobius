@@ -5,7 +5,7 @@
   "start_url": "/",
   "display": "standalone",
   "background_color": "#fff0d5",
-  "theme_color": "#c3b091",
+  "theme_color": "#c7a97f",
   "icons": [
     {
       "src": "mobius-logo.png",
