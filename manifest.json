@@ -1,7 +1,7 @@
 {
-  "name": "Mobius",
+  "name": "Mobius PWA",
   "short_name": "Mobius",
-  "description": "AI Interface",
+  "description": "AI Coordinator",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#fff0d5",
@@ -10,11 +10,11 @@
     {
       "src": "favicon.ico",
       "sizes": "192x192",
-      "type": "image/png",
+      "type": "image/x-icon",
       "purpose": "any maskable"
     },
     {
-      "src": "mobius-logo.png",
+      "src": "mobiu_logo.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
