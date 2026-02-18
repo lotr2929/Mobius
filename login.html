@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
+    <title>Mobius - Login</title>
+    <link rel="icon" type="image/png" href="mobius-logo.png">
+    <style>
+        body {
+            font-family: 'Century Gothic', 'Avenir', 'Segoe UI', 'Verdana', sans-serif;
+            padding: 20px;
+            max-width: 400px;
+            margin: 80px auto;
+            background: #e2dccd;
+        }
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        h1 { margin: 0; font-size: 48px; }
+        input {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border: 1px solid #8d7c64;
+            border-radius: 1px;
+            box-sizing: border-box;
+            background: #f5eedd;
+            font-family: 'Century Gothic', 'Avenir', 'Segoe UI', 'Verdana', sans-serif;
+            margin-bottom: 10px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            background: #8d7c64;
+            color: white;
+            border: none;
+            border-radius: 1px;
+            cursor: pointer;
+            margin-top: 6px;
+        }
+        button:hover { background: #574d3e; }
+        #error {
+            color: #8B0000;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="logo">
+        <img src="mobius-logo.png" style="height: 75px;">
+        <h1>Mobius</h1>
+    </div>
+    <label style="font-size:14px; color:#4a3728;">Username</label>
+    <input type="text" id="username" placeholder="Enter username">
+    <label style="font-size:14px; color:#4a3728;">Password</label>
+    <input type="password" id="password" placeholder="Enter password">
+    <button onclick="login()">Login</button>
+    <div id="error"></div>
+
+    <script>
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            const res = await fetch('/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await res.json();
+
+            if (data.userId) {
+                localStorage.setItem('mobius_user_id', data.userId);
+                localStorage.setItem('mobius_username', data.username);
+                window.location.href = '/';
+            } else {
+                document.getElementById('error').textContent = 'Invalid username or password.';
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,5 +1,7 @@
 import express from 'express';
 import fetch from 'node-fetch';
+import { createClient } from '@supabase/supabase-js';
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -70,8 +72,29 @@ async function askWebSearch(text) {
   return await askGroq(prompt);
 }
 
+async function saveConversation(userId, question, answer, model, topic) {
+  await supabase.from('conversations').insert({
+    user_id: userId,
+    question,
+    answer,
+    model,
+    topic
+  });
+}
+
+async function getMemory(userId, topic) {
+  const { data } = await supabase
+    .from('conversations')
+    .select('question, answer')
+    .eq('user_id', userId)
+    .eq('topic', topic)
+    .order('created_at', { ascending: false })
+    .limit(5);
+  return data || [];
+}
+
 app.post('/ask', async (req, res) => {
-  const { text, model } = req.body;
+  const { text, model, userId, topic } = req.body;
   try {
     let reply;
     if (model === 'gemini') {
@@ -81,11 +104,34 @@ app.post('/ask', async (req, res) => {
     } else {
       reply = await askGroq(text);
     }
+    if (userId) await saveConversation(userId, text, reply, model, topic || 'general');
     res.json({ reply });
   } catch (err) {
     console.error('Error:', err.message);
     res.status(500).json({ error: err.message });
   }
+});
+
+// Login route
+app.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+  const { data } = await supabase
+    .from('users')
+    .select('id, username')
+    .eq('username', username)
+    .eq('password', password)
+    .single();
+
+  if (data) {
+    res.json({ userId: data.id, username: data.username });
+  } else {
+    res.status(401).json({ error: 'Invalid credentials' });
+  }
+});
+
+// Serve login page
+app.get('/login', (req, res) => {
+  res.sendFile('login.html', { root: '.' });
 });
 
 app.listen(PORT, () => console.log('Server on ' + PORT));

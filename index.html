@@ -105,6 +105,8 @@
         };
 
         async function ask() {
+            const userId = localStorage.getItem('mobius_user_id');
+            if (!userId) { window.location.href = '/login'; return; }
             const text = document.getElementById('input').value;
             const model = document.getElementById('modelSelect').value;
             const responseDiv = document.getElementById('response');
@@ -115,7 +117,7 @@
                 const res = await fetch('/ask', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text, model })
+                    body: JSON.stringify({ text, model, userId: localStorage.getItem('mobius_user_id') })
                 });
                 const data = await res.json();
                 const htmlContent = markdownToHtml(data.reply || data.error);
