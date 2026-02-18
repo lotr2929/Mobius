@@ -97,6 +97,18 @@ app.post('/ask', async (req, res) => {
   const { text, model, userId, topic } = req.body;
   try {
     let reply;
+
+    // Retrieve memory and inject into prompt
+    let promptWithMemory = text;
+    if (userId) {
+      const memory = await getMemory(userId, 'general');
+      if (memory.length > 0) {
+        const memoryContext = memory
+          .map(m => `Q: ${m.question}\nA: ${m.answer}`)
+          .join('\n\n');
+        promptWithMemory = `Here is some context from previous conversations with this user:\n\n${memoryContext}\n\nNow answer this: ${text}`;
+      }
+      
     if (model === 'gemini') {
       reply = await askGemini(text);
     } else if (model === 'websearch') {

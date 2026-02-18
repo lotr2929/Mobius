@@ -15,7 +15,8 @@ if not exist "index.html" (
 REM Generate timestamp
 set TIMESTAMP=%DATE:~10,4%%DATE:~4,2%%DATE:~7,2%-%TIME:~0,2%%TIME:~3,2%
 set TIMESTAMP=%TIMESTAMP: =0%
-set ZIPNAME=Mobius-backup-%TIMESTAMP%.zip
+set ZIPNAME=Mobius-backup.zip
+echo Backup created: %TIMESTAMP% > backup-timestamp.txt
 
 echo Creating %ZIPNAME%...
 echo (Skipping node_modules, .git, and .gif files)
