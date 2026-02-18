@@ -23,7 +23,7 @@
             width: 100%; 
             padding: 12px; 
             font-size: 16px; 
-            border: 1px solid #d4c4b0;
+            border: 1px solid #8d7c64;
             border-radius: 1px;
             box-sizing: border-box;
             font-family: 'Century Gothic', 'Avenir', 'Segoe UI', 'Verdana', sans-serif;
@@ -38,23 +38,23 @@
             align-items: center;
         }
         button { 
-            padding: 5px 10px;
+            padding: 2px 10px;
             font-size: 16px;
-            background: #8B6F47;
+            background: #8d7c64;
             color: white;
             border: none;
             border-radius: 1px;
             cursor: pointer;
         }
         button:hover {
-            background: #6e5839;
+            background: #574d3e;
         }
         select {
-            padding: 10px;
+            padding: 5px;
             font-size: 16px;
             font-family: 'Century Gothic', 'Avenir', 'Segoe UI', 'Verdana', sans-serif;
             background: #e2dccd;
-            border: 1px solid #d4c4b0;
+            border: 1px solid #8d7c64;
             border-radius: 1px;
             cursor: pointer;
             color: #4a3728;
@@ -63,7 +63,7 @@
             margin-top: 20px; 
             padding: 20px; 
             background: #f5eedd;
-            border: 1px solid #d4c4b0;
+            border: 1px solid #8d7c64;
             border-radius: 1px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             white-space: pre-wrap; 
@@ -82,6 +82,7 @@
         <select id="modelSelect">
             <option value="groq">Groq - Llama 3.3 70B</option>
             <option value="gemini">Gemini - 2.5 Flash Lite</option>
+            <option value="websearch">Web Search (Tavily + Groq)</option>
         </select>
     </div>
     <div id="response"></div>
@@ -97,7 +98,8 @@
 
         const modelLabels = {
             groq: 'Groq - Llama 3.3 70B',
-            gemini: 'Gemini - 2.5 Flash Lite'
+            gemini: 'Gemini - 2.5 Flash Lite',
+            websearch: 'Web Search (Tavily+Groq)'
         };
 
         async function ask() {
