@@ -90,6 +90,11 @@
     <div id="response"></div>
     
     <script>
+        // Check login on page load
+        if (!localStorage.getItem('mobius_user_id')) {
+            window.location.href = '/login';
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const textarea = document.getElementById('input');
             textarea.addEventListener('input', () => {
