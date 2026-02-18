@@ -12,12 +12,21 @@ if not exist "index.html" (
     exit /b 1
 )
 
+REM Generate timestamp e.g. 20260218-1430
+set TIMESTAMP=%DATE:~10,4%%DATE:~4,2%%DATE:~7,2%-%TIME:~0,2%%TIME:~3,2%
+set TIMESTAMP=%TIMESTAMP: =0%
+set CACHE_NAME=mobius-%TIMESTAMP%
+
+echo [0/3] Updating cache version to: %CACHE_NAME%
+powershell -Command "(Get-Content service-worker.js) -replace \"const CACHE_NAME = '.*';\", \"const CACHE_NAME = '%CACHE_NAME%';\" | Set-Content service-worker.js"
+echo.
+
 echo [1/3] Staging files...
 git add .
 echo.
 
 echo [2/3] Committing changes...
-git commit -m "Deploy update"
+git commit -m "Deploy update %CACHE_NAME%"
 if %errorlevel% neq 0 (
     echo No changes to commit.
     echo.
