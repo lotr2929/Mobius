@@ -38,7 +38,7 @@
             align-items: center;
         }
         button { 
-            padding: 2px 10px; 
+            padding: 2px 10px;
             font-size: 16px;
             background: #8B6F47;
             color: white;
@@ -80,8 +80,8 @@
     <div class="controls">
         <button onclick="ask()">Ask</button>
         <select id="modelSelect">
-            <option value="groq">Groq — Llama 3.3 70B</option>
-            <option value="gemini">Gemini — 2.0 Flash</option>
+            <option value="groq">Groq - Llama 3.3 70B</option>
+            <option value="gemini">Gemini - 2.5 Flash Lite</option>
         </select>
     </div>
     <div id="response"></div>
@@ -96,8 +96,8 @@
         });
 
         const modelLabels = {
-            groq: 'Groq — Llama 3.3 70B',
-            gemini: 'Gemini — 2.0 Flash'
+            groq: 'Groq - Llama 3.3 70B',
+            gemini: 'Gemini - 2.5 Flash Lite'
         };
 
         async function ask() {
