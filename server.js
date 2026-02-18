@@ -24,7 +24,10 @@ async function askGroq(text) {
 }
 
 async function askGemini(text) {
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + process.env.GEMINI_API_KEY;
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error('GEMINI_API_KEY is not set on the server.');
+
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + key;
   const r = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -33,6 +36,11 @@ async function askGemini(text) {
     })
   });
   const data = await r.json();
+  console.log('Gemini response:', JSON.stringify(data));
+
+  if (data.error) throw new Error('Gemini API error: ' + data.error.message);
+  if (!data.candidates || !data.candidates[0]) throw new Error('No candidates in Gemini response: ' + JSON.stringify(data));
+
   return data.candidates[0].content.parts[0].text;
 }
 
@@ -47,6 +55,7 @@ app.post('/ask', async (req, res) => {
     }
     res.json({ reply });
   } catch (err) {
+    console.error('Error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
