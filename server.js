@@ -2,6 +2,7 @@ import express from 'express';
 import fetch from 'node-fetch';
 import { createClient } from '@supabase/supabase-js';
 import { google } from 'googleapis';
+import { getDriveFiles, getTasks, getCalendarEvents, getEmails, getGoogleClient } from './google_api.js';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
@@ -11,7 +12,7 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static('.'));
 
-// ── AI functions ─────────────────────────────────────────────────────────────
+// ── AI functions ──────────────────────────────────────────────────────────────
 
 async function askGroq(messages) {
   const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -75,6 +76,7 @@ async function askWebSearch(messages) {
 async function saveConversation(userId, question, answer, model, topic) {
   await supabase.from('conversations').insert({ user_id: userId, question, answer, model, topic });
 }
+
 // ── Google OAuth ──────────────────────────────────────────────────────────────
 
 const oauth2Client = new google.auth.OAuth2(
@@ -128,40 +130,6 @@ app.get('/auth/google/status', async (req, res) => {
   res.json({ connected: !!data });
 });
 
-async function getGoogleClient(userId) {
-  const { data } = await supabase
-    .from('google_tokens')
-    .select('access_token, refresh_token, expiry_date')
-    .eq('user_id', userId)
-    .single();
-  if (!data) throw new Error('Google not connected for this user.');
-  const client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
-  );
-  client.setCredentials({
-    access_token: data.access_token,
-    refresh_token: data.refresh_token,
-    expiry_date: data.expiry_date
-  });
-  return client;
-}
-
-async function getDriveFiles(userId, query) {
-  const client = await getGoogleClient(userId);
-  const drive = google.drive({ version: 'v3', auth: client });
-  const response = await drive.files.list({
-    pageSize: 10,
-    fields: 'files(id, name, mimeType, modifiedTime)',
-    orderBy: 'modifiedTime desc'
-  });
-  const files = response.data.files;
-  if (!files.length) return 'No files found in Google Drive.';
-  return 'Recent Google Drive files:\n' + files.map((f, i) =>
-    `${i+1}. ${f.name} (${f.mimeType.split('.').pop()}, modified ${new Date(f.modifiedTime).toLocaleDateString()})`
-  ).join('\n');
-}
 // ── Parser ────────────────────────────────────────────────────────────────────
 
 function buildMobiusQuery(text, model, history) {
@@ -173,36 +141,43 @@ function buildMobiusQuery(text, model, history) {
   };
 }
 
+// ── Routes ────────────────────────────────────────────────────────────────────
+
 app.post('/parse', (req, res) => {
   const { text, model, history } = req.body;
   const mobius_query = buildMobiusQuery(text, model, history);
 
-  // Detect Google service intent
   const lower = text.toLowerCase();
   if (lower.includes('drive') || lower.includes('my files') || lower.includes('google drive')) {
     mobius_query.ASK = 'google_drive';
+  } else if (lower.includes('task') || lower.includes('todo') || lower.includes('to-do')) {
+    mobius_query.ASK = 'google_tasks';
+  } else if (lower.includes('calendar') || lower.includes('schedule') || lower.includes('events')) {
+    mobius_query.ASK = 'google_calendar';
+  } else if (lower.includes('email') || lower.includes('gmail') || lower.includes('inbox')) {
+    mobius_query.ASK = 'google_gmail';
   }
 
   res.json({ mobius_query });
 });
 
-// Step 2: Execute — receive mobius_query and send to AI
 app.post('/ask', async (req, res) => {
   const { mobius_query, userId, topic } = req.body;
-  const { ASK, INSTRUCTIONS, QUERY, FILES } = mobius_query;
+  const { ASK, INSTRUCTIONS, QUERY } = mobius_query;
 
   try {
-    const messages = [
-      ...INSTRUCTIONS,
-      { role: 'user', content: QUERY }
-    ];
-
+    const messages = [...INSTRUCTIONS, { role: 'user', content: QUERY }];
     let reply;
     let modelUsed = ASK;
 
     if (ASK === 'google_drive') {
       reply = await getDriveFiles(userId, QUERY);
-      modelUsed = 'google_drive';
+    } else if (ASK === 'google_tasks') {
+      reply = await getTasks(userId);
+    } else if (ASK === 'google_calendar') {
+      reply = await getCalendarEvents(userId);
+    } else if (ASK === 'google_gmail') {
+      reply = await getEmails(userId);
     } else if (ASK === 'gemini') {
       reply = await askGemini(messages);
     } else if (ASK === 'websearch') {
@@ -220,7 +195,6 @@ app.post('/ask', async (req, res) => {
   }
 });
 
-// Login route
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
   const { data } = await supabase
