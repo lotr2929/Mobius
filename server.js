@@ -162,6 +162,16 @@ async function getDriveFiles(userId, query) {
     `${i+1}. ${f.name} (${f.mimeType.split('.').pop()}, modified ${new Date(f.modifiedTime).toLocaleDateString()})`
   ).join('\n');
 }
+// ── Parser ────────────────────────────────────────────────────────────────────
+
+function buildMobiusQuery(text, model, history) {
+  return {
+    ASK: model,
+    INSTRUCTIONS: history || [],
+    QUERY: text,
+    FILES: []
+  };
+}
 
 app.post('/parse', (req, res) => {
   const { text, model, history } = req.body;

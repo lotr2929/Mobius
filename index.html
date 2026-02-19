@@ -106,11 +106,11 @@
     <textarea id="input" placeholder="Ask something..." rows="3"></textarea>
     <div class="controls">
         <button id="askBtn" onclick="handleAsk()" style="width:80px;">Ask</button>
-        <div style="display:flex; flex-direction:column; gap:0px; margin-left:4px;">
+        <div style="display:flex; flex-direction:column; gap:0px; margin-left:2px;">
             <button onclick="navigateChat(-1)" title="Previous query" style="height:15px; width:24px; padding:0; font-size:10px; line-height:1; background:#8d7c64;">&#9650;</button>
             <button onclick="navigateChat(1)" title="Next query" style="height:15px; width:24px; padding:0; font-size:10px; line-height:1; background:#8d7c64;">&#9660;</button>
         </div>
-        <input id="chatSearch" type="text" placeholder="Search..." oninput="searchChat(this.value)" style="height:32px; padding:0 8px; font-size:14px; border:1px solid #8d7c64; background:#f5eedd; color:#4a3728; border-radius:1px; flex:1; margin-left:4px;">
+        <input id="chatSearch" type="text" placeholder="Search..." oninput="searchChat(this.value)" style="height:32px; padding:0 8px; font-size:14px; border:1px solid #8d7c64; background:#f5eedd; color:#4a3728; border-radius:1px; flex:1; margin-left:2px;">
     </div>
     <div id="chatPanel"></div>
     
