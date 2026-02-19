@@ -148,23 +148,31 @@ async function getGoogleClient(userId) {
   return client;
 }
 
-// ── Parser ────────────────────────────────────────────────────────────────────
-
-function buildMobiusQuery(text, model, history) {
-  return {
-    ASK: model,
-    INSTRUCTIONS: history || [],   // chat history as context
-    QUERY: text,
-    FILES: []
-  };
+async function getDriveFiles(userId, query) {
+  const client = await getGoogleClient(userId);
+  const drive = google.drive({ version: 'v3', auth: client });
+  const response = await drive.files.list({
+    pageSize: 10,
+    fields: 'files(id, name, mimeType, modifiedTime)',
+    orderBy: 'modifiedTime desc'
+  });
+  const files = response.data.files;
+  if (!files.length) return 'No files found in Google Drive.';
+  return 'Recent Google Drive files:\n' + files.map((f, i) =>
+    `${i+1}. ${f.name} (${f.mimeType.split('.').pop()}, modified ${new Date(f.modifiedTime).toLocaleDateString()})`
+  ).join('\n');
 }
 
-// ── Routes ────────────────────────────────────────────────────────────────────
-
-// Step 1: Parse only — return mobius_query for user review
 app.post('/parse', (req, res) => {
   const { text, model, history } = req.body;
   const mobius_query = buildMobiusQuery(text, model, history);
+
+  // Detect Google service intent
+  const lower = text.toLowerCase();
+  if (lower.includes('drive') || lower.includes('my files') || lower.includes('google drive')) {
+    mobius_query.ASK = 'google_drive';
+  }
+
   res.json({ mobius_query });
 });
 
@@ -182,7 +190,10 @@ app.post('/ask', async (req, res) => {
     let reply;
     let modelUsed = ASK;
 
-    if (ASK === 'gemini') {
+    if (ASK === 'google_drive') {
+      reply = await getDriveFiles(userId, QUERY);
+      modelUsed = 'google_drive';
+    } else if (ASK === 'gemini') {
       reply = await askGemini(messages);
     } else if (ASK === 'websearch') {
       reply = await askWebSearch(messages);
