@@ -3,14 +3,18 @@ import fetch from 'node-fetch';
 import { createClient } from '@supabase/supabase-js';
 import { google } from 'googleapis';
 import { getDriveFiles, getTasks, getCalendarEvents, getEmails, getGoogleClient } from './google_api.js';
+import multer from 'multer';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '20mb' }));
 app.use(express.static('.'));
+
+// ── Multer (file uploads, memory storage) ────────────────────────────────────
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 // ── AI functions ──────────────────────────────────────────────────────────────
 
@@ -27,13 +31,21 @@ async function askGroq(messages) {
   return data.choices[0].message.content;
 }
 
-async function askGemini(messages) {
+async function askGemini(messages, imageParts = []) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error('GEMINI_API_KEY is not set on the server.');
-  const contents = messages.map(m => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: m.content }]
-  }));
+  const contents = messages.map((m, i) => {
+    const isLastUser = i === messages.length - 1 && m.role === 'user';
+    const parts = [];
+    if (isLastUser && imageParts.length > 0) {
+      parts.push(...imageParts);
+    }
+    parts.push({ text: m.content });
+    return {
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts
+    };
+  });
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=' + key;
   const r = await fetch(url, {
     method: 'POST',
@@ -130,6 +142,40 @@ app.get('/auth/google/status', async (req, res) => {
   res.json({ connected: !!data });
 });
 
+// ── Chat History ──────────────────────────────────────────────────────────────
+
+app.get('/api/chat-history', async (req, res) => {
+  const { userId } = req.query;
+  if (!userId) return res.status(400).json({ error: 'userId required' });
+
+  const { data, error } = await supabase
+    .from('conversations')
+    .select('id, question, answer, model, topic, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true });
+
+  if (error) return res.status(500).json({ error: error.message });
+
+  // Group into sessions by 30-min gap
+  const sessions = [];
+  let current = null;
+  const GAP_MS = 30 * 60 * 1000;
+
+  for (const row of data) {
+    const t = new Date(row.created_at).getTime();
+    if (!current || t - current.lastTime > GAP_MS) {
+      current = { title: row.question, started_at: row.created_at, lastTime: t, messages: [] };
+      sessions.push(current);
+    }
+    current.lastTime = t;
+    current.messages.push({ id: row.id, question: row.question, answer: row.answer, model: row.model, created_at: row.created_at });
+  }
+
+  // Return newest first
+  sessions.reverse();
+  res.json({ sessions });
+});
+
 // ── Parser ────────────────────────────────────────────────────────────────────
 
 function buildMobiusQuery(text, model, history) {
@@ -148,7 +194,10 @@ app.post('/parse', (req, res) => {
   const mobius_query = buildMobiusQuery(text, model, history);
 
   const lower = text.toLowerCase();
-  if (lower.includes('drive') || lower.includes('my files') || lower.includes('google drive')) {
+
+  if (lower.includes('chat history') || lower.includes('conversation history')) {
+    mobius_query.ASK = 'chat_history';
+  } else if (lower.includes('drive') || lower.includes('my files') || lower.includes('google drive')) {
     mobius_query.ASK = 'google_drive';
   } else if (lower.includes('task') || lower.includes('todo') || lower.includes('to-do')) {
     mobius_query.ASK = 'google_tasks';
@@ -161,16 +210,40 @@ app.post('/parse', (req, res) => {
   res.json({ mobius_query });
 });
 
+// File upload endpoint — returns base64 + mime for client to attach to query
+app.post('/upload', upload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const base64 = req.file.buffer.toString('base64');
+  res.json({
+    name: req.file.originalname,
+    mimeType: req.file.mimetype,
+    base64,
+    size: req.file.size
+  });
+});
+
 app.post('/ask', async (req, res) => {
   const { mobius_query, userId, topic } = req.body;
-  const { ASK, INSTRUCTIONS, QUERY } = mobius_query;
+  const { ASK, INSTRUCTIONS, QUERY, FILES } = mobius_query;
 
   try {
     const messages = [...INSTRUCTIONS, { role: 'user', content: QUERY }];
     let reply;
     let modelUsed = ASK;
 
-    if (ASK === 'google_drive') {
+    // Build image parts from FILES if any
+    const imageParts = (FILES || [])
+      .filter(f => f.mimeType && f.mimeType.startsWith('image/'))
+      .map(f => ({ inline_data: { mime_type: f.mimeType, data: f.base64 } }));
+
+    const hasImages = imageParts.length > 0;
+    const hasNonImageFiles = (FILES || []).some(f => f.mimeType && !f.mimeType.startsWith('image/'));
+
+    if (ASK === 'chat_history') {
+      // Return marker — client handles rendering
+      reply = '__CHAT_HISTORY__';
+      modelUsed = 'system';
+    } else if (ASK === 'google_drive') {
       reply = await getDriveFiles(userId, QUERY);
     } else if (ASK === 'google_tasks') {
       reply = await getTasks(userId);
@@ -178,16 +251,35 @@ app.post('/ask', async (req, res) => {
       reply = await getCalendarEvents(userId);
     } else if (ASK === 'google_gmail') {
       reply = await getEmails(userId);
-    } else if (ASK === 'gemini') {
-      reply = await askGemini(messages);
+    } else if (ASK === 'gemini' || hasImages) {
+      // Route to Gemini if explicitly chosen or if images attached
+      reply = await askGemini(messages, imageParts);
+      modelUsed = 'gemini';
     } else if (ASK === 'websearch') {
+      // Append non-image file text to query if present
+      if (hasNonImageFiles) {
+        const fileTexts = (FILES || [])
+          .filter(f => !f.mimeType.startsWith('image/'))
+          .map(f => `[File: ${f.name}]\n${Buffer.from(f.base64, 'base64').toString('utf8')}`)
+          .join('\n\n');
+        messages[messages.length - 1].content += '\n\n' + fileTexts;
+      }
       reply = await askWebSearch(messages);
       modelUsed = 'groq';
     } else {
+      if (hasNonImageFiles) {
+        const fileTexts = (FILES || [])
+          .filter(f => !f.mimeType.startsWith('image/'))
+          .map(f => `[File: ${f.name}]\n${Buffer.from(f.base64, 'base64').toString('utf8')}`)
+          .join('\n\n');
+        messages[messages.length - 1].content += '\n\n' + fileTexts;
+      }
       reply = await askGroq(messages);
     }
 
-    if (userId) await saveConversation(userId, QUERY, reply, modelUsed, topic || 'general');
+    if (userId && reply !== '__CHAT_HISTORY__') {
+      await saveConversation(userId, QUERY, reply, modelUsed, topic || 'general');
+    }
     res.json({ reply, modelUsed });
   } catch (err) {
     console.error('Error:', err.message);
