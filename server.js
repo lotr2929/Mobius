@@ -148,18 +148,6 @@ async function getGoogleClient(userId) {
   return client;
 }
 
-// Temporary test route — remove after testing
-app.get('/google/test', async (req, res) => {
-  const { userId } = req.query;
-  try {
-    const client = await getGoogleClient(userId);
-    const drive = google.drive({ version: 'v3', auth: client });
-    const response = await drive.files.list({ pageSize: 5, fields: 'files(id, name)' });
-    res.json({ files: response.data.files });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 // ── Parser ────────────────────────────────────────────────────────────────────
 
 function buildMobiusQuery(text, model, history) {
