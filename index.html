@@ -354,7 +354,7 @@
             document.getElementById('contextMenu').style.display = 'none';
         }
 
-        function ctxAction(action) {
+        async function ctxAction(action) {
             hideContextMenu();
             if (!ctxSession) return;
             if (action === 'load') {
@@ -367,11 +367,20 @@
                 navigator.clipboard.writeText(full).then(() => alert('Full chat copied!'));
             } else if (action === 'paste-context') {
                 const summary = buildSummary(ctxSession);
-                const inp = document.getElementById('input');
-                inp.value = (inp.value ? inp.value + '\n\n' : '') + '[Context from previous chat]\n' + summary;
-                inp.style.height = 'auto';
-                inp.style.height = inp.scrollHeight + 'px';
-                inp.focus();
+                const filename = 'context-' + new Date(ctxSession.started_at).toISOString().slice(0,10) + '.txt';
+                const blob = new Blob([summary], { type: 'text/plain' });
+                const file = new File([blob], filename, { type: 'text/plain' });
+                const fd = new FormData();
+                fd.append('file', file);
+                try {
+                    const res = await fetch('/upload', { method: 'POST', body: fd });
+                    const data = await res.json();
+                    if (data.error) { alert('Error: ' + data.error); return; }
+                    attachedFiles.push(data);
+                    addFileChip(data);
+                } catch (err) {
+                    alert('Failed to attach context: ' + err.message);
+                }
             }
         }
 
