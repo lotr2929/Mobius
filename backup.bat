@@ -19,10 +19,10 @@ set ZIPNAME=Mobius-backup.zip
 echo Backup created: %TIMESTAMP% > backup-timestamp.txt
 
 echo Creating %ZIPNAME%...
-echo (Skipping node_modules, .git, and .gif files)
+echo (Skipping node_modules, .git, .gif files, and secrets folder)
 echo.
 
-powershell -Command "Compress-Archive -Path (Get-ChildItem -Path '.' -Recurse | Where-Object { $_.FullName -notmatch '\\node_modules\\' -and $_.FullName -notmatch '\\.git\\' -and $_.Extension -ne '.gif' -and -not $_.PSIsContainer } | Select-Object -ExpandProperty FullName) -DestinationPath '%ZIPNAME%'"
+powershell -Command "Compress-Archive -Path (Get-ChildItem -Path '.' -Recurse | Where-Object { $_.FullName -notmatch '\\node_modules\\' -and $_.FullName -notmatch '\\.git\\' -and $_.FullName -notmatch '\\secrets\\' -and $_.Extension -ne '.gif' -and -not $_.PSIsContainer } | Select-Object -ExpandProperty FullName) -DestinationPath '%ZIPNAME%' -Force"
 
 if %errorlevel% neq 0 (
     echo ERROR: Zip creation failed!

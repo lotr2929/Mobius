@@ -212,7 +212,7 @@
             entry.className = 'chat-entry';
             entry.innerHTML = `
                 <div class="chat-query">Q: ${escapeHtml(text)}</div>
-                <div class="mq-label">▸ Mobius Query (press Ask to send, or Clear to cancel)</div>
+                <div class="mq-label">▸ Mobius Query (press Ask to send)</div>
             `;
             const mqPreview = document.createElement('div');
             mqPreview.className = 'mq-block';
@@ -277,13 +277,35 @@
                 chatHistory.push({ role: 'user', content: mq.QUERY });
                 chatHistory.push({ role: 'assistant', content: reply });
 
-                // Clear input
+                // Clear query input
                 document.getElementById('input').value = '';
                 scrollToBottom();
             } catch (err) {
                 answerDiv.className = 'chat-answer';
                 answerDiv.textContent = 'Error: ' + err.message;
             }
+        }
+
+        // Auto-connect Google if not already connected
+        async function autoConnectGoogle() {
+            const userId = localStorage.getItem('mobius_user_id');
+            if (!userId) return;
+            try {
+                const res = await fetch('/auth/google/status?userId=' + userId);
+                const data = await res.json();
+                if (!data.connected) {
+                    // Redirect to Google OAuth
+                    window.location.href = '/auth/google?userId=' + userId;
+                }
+            } catch (e) {}
+        }
+
+        // Auto-connect on load
+        autoConnectGoogle();
+
+        // If returning from Google OAuth
+        if (window.location.search.includes('google=connected')) {
+            history.replaceState({}, '', '/');
         }
 
     </script>
