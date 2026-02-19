@@ -47,28 +47,52 @@
             border-radius: 1px;
             cursor: pointer;
         }
-        button:hover {
-            background: #574d3e;
-        }
-        select {
-            padding: 5px;
-            height: 32px;
-            font-size: 16px;
-            font-family: 'Century Gothic', 'Avenir', 'Segoe UI', 'Verdana', sans-serif;
-            background: #e2dccd;
-            border: 1px solid #8d7c64;
-            border-radius: 1px;
-            cursor: pointer;
-            color: #4a3728;
-        }
-        #response { 
+        button:hover { background: #574d3e; }
+        button:disabled { background: #b8a898; cursor: not-allowed; }
+
+        #chatPanel { 
             margin-top: 20px; 
-            padding: 20px; 
+            padding: 16px; 
             background: #f5eedd;
             border: 1px solid #8d7c64;
             border-radius: 1px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            white-space: pre-wrap; 
+            max-height: 520px;
+            overflow-y: auto;
+        }
+        .chat-entry { margin-bottom: 16px; }
+        .chat-query {
+            color: #4a3728;
+            font-weight: bold;
+            margin-bottom: 4px;
+            white-space: pre-wrap;
+        }
+        .chat-answer { color: #2a2a2a; white-space: pre-wrap; }
+        .chat-label { font-size: 13px; color: #8d7c64; margin-bottom: 2px; }
+        .chat-divider {
+            border: none;
+            border-top: 1px solid #c9bfae;
+            margin: 12px 0;
+        }
+        .thinking { color: #8d7c64; font-style: italic; }
+
+        /* mobius_query display */
+        .mq-block {
+            background: #ede5d4;
+            border: 1px dashed #8d7c64;
+            border-radius: 1px;
+            padding: 10px 14px;
+            font-size: 13px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            color: #3a2e22;
+            margin-top: 6px;
+        }
+        .mq-label {
+            font-size: 12px;
+            color: #a08060;
+            margin-bottom: 4px;
+            font-family: 'Century Gothic', 'Avenir', 'Segoe UI', 'Verdana', sans-serif;
         }
     </style>
 </head>
@@ -81,24 +105,16 @@
     
     <textarea id="input" placeholder="Ask something..." rows="3"></textarea>
     <div class="controls">
-        <button onclick="ask()">Ask</button>
-        <select id="modelSelect">
-            <option value="groq">Groq - Llama 3.3 70B</option>
-            <option value="gemini">Gemini - 2.5 Flash Lite</option>
-            <option value="websearch">Web Search (Tavily + Groq)</option>
-        </select>
+        <button id="askBtn" onclick="handleAsk()">Ask</button>
     </div>
-    <div id="response"></div>
+    <div id="chatPanel"></div>
     
     <script>
-        // Check login on page load
         if (!localStorage.getItem('mobius_user_id')) {
             window.location.href = '/login';
         } else {
-            document.addEventListener('DOMContentLoaded', () => {
-                const username = localStorage.getItem('mobius_username');
-                document.getElementById('userLabel').textContent = 'User: ' + username;
-            });
+            const username = localStorage.getItem('mobius_username');
+            document.getElementById('userLabel').textContent = 'User: ' + username;
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -107,35 +123,39 @@
                 textarea.style.height = 'auto';
                 textarea.style.height = textarea.scrollHeight + 'px';
             });
+            textarea.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && e.ctrlKey) handleAsk();
+            });
         });
 
+        // In-memory chat history for the session
+        let chatHistory = [];
+
+        // Pending mobius_query waiting for user confirmation
+        let pendingMobiusQuery = null;
+
         const modelLabels = {
-            groq: 'Groq - Llama 3.3 70B',
-            gemini: 'Gemini - 2.5 Flash Lite',
-            websearch: 'Web Search (Tavily+Groq)'
+            groq: 'Groq',
+            gemini: 'Gemini',
+            websearch: 'Groq+Tavily'
         };
 
-        async function ask() {
-            const userId = localStorage.getItem('mobius_user_id');
-            if (!userId) { window.location.href = '/login'; return; }
-            const text = document.getElementById('input').value;
-            const model = document.getElementById('modelSelect').value;
-            const responseDiv = document.getElementById('response');
-            
-            responseDiv.innerHTML = '<strong>' + modelLabels[model] + '</strong><br><br>Thinking...';
-            
-            try {
-                const res = await fetch('/ask', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text, model, userId: localStorage.getItem('mobius_user_id') })
-                });
-                const data = await res.json();
-                const htmlContent = markdownToHtml(data.reply || data.error);
-                responseDiv.innerHTML = '<strong>' + modelLabels[model] + '</strong><br><br>' + htmlContent;
-            } catch (err) {
-                responseDiv.innerHTML = '<strong>Error</strong><br><br>' + err.message;
+        function scrollToBottom() {
+            const panel = document.getElementById('chatPanel');
+            panel.scrollTop = panel.scrollHeight;
+        }
+
+        function addDivider() {
+            const panel = document.getElementById('chatPanel');
+            if (panel.children.length > 0) {
+                const hr = document.createElement('hr');
+                hr.className = 'chat-divider';
+                panel.appendChild(hr);
             }
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         }
 
         function markdownToHtml(text) {
@@ -149,6 +169,123 @@
                 .replace(/`([^`]+)`/g, '<code>$1</code>')
                 .replace(/\n/g, '<br>');
         }
+
+        // Render mobius_query compactly — show INSTRUCTIONS count, not full history
+        function formatMobiusQuery(mq) {
+            const display = {
+                ASK: mq.ASK,
+                INSTRUCTIONS: mq.INSTRUCTIONS.length > 0
+                    ? `[${mq.INSTRUCTIONS.length} message(s) of chat history]`
+                    : '[]',
+                QUERY: mq.QUERY,
+                FILES: mq.FILES
+            };
+            return JSON.stringify(display, null, 2);
+        }
+
+        // ── Main handler — toggles between parse and ask ──────────────────────
+
+        async function handleAsk() {
+            const userId = localStorage.getItem('mobius_user_id');
+            if (!userId) { window.location.href = '/login'; return; }
+
+            if (pendingMobiusQuery) {
+                // Second press: execute the pending mobius_query
+                await executeQuery(userId);
+            } else {
+                // First press: parse and show mobius_query
+                await parseQuery(userId);
+            }
+        }
+
+        async function parseQuery(userId) {
+            const text = document.getElementById('input').value.trim();
+            if (!text) return;
+
+            const model = 'groq';  // ASK will be auto-detected by parser later
+            const panel = document.getElementById('chatPanel');
+
+            addDivider();
+
+            // Show the query text
+            const entry = document.createElement('div');
+            entry.className = 'chat-entry';
+            entry.innerHTML = `
+                <div class="chat-query">Q: ${escapeHtml(text)}</div>
+                <div class="mq-label">▸ Mobius Query (press Ask to send, or Clear to cancel)</div>
+            `;
+            const mqPreview = document.createElement('div');
+            mqPreview.className = 'mq-block';
+            mqPreview.textContent = 'Building...';
+            entry.appendChild(mqPreview);
+            panel.appendChild(entry);
+            scrollToBottom();
+
+            try {
+                const res = await fetch('/parse', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text, model, history: chatHistory })
+                });
+                const data = await res.json();
+                pendingMobiusQuery = data.mobius_query;
+
+                mqPreview.textContent = formatMobiusQuery(pendingMobiusQuery);
+                scrollToBottom();
+            } catch (err) {
+                mqPreview.textContent = 'Error: ' + err.message;
+                pendingMobiusQuery = null;
+            }
+        }
+
+        async function executeQuery(userId) {
+            const panel = document.getElementById('chatPanel');
+            const model = pendingMobiusQuery.ASK;
+            const modelLabel = modelLabels[model] || model;
+
+            // Append the answer area below the existing mq-block entry
+            const answerWrapper = document.createElement('div');
+            const answerLabel = document.createElement('div');
+            answerLabel.className = 'chat-label';
+            answerLabel.textContent = `A:(${modelLabel})`;
+            const answerDiv = document.createElement('div');
+            answerDiv.className = 'chat-answer thinking';
+            answerDiv.textContent = 'Thinking...';
+            answerWrapper.appendChild(answerLabel);
+            answerWrapper.appendChild(answerDiv);
+            panel.appendChild(answerWrapper);
+            scrollToBottom();
+
+            const mq = pendingMobiusQuery;
+            pendingMobiusQuery = null;  // clear pending before async call
+
+            try {
+                const res = await fetch('/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mobius_query: mq, userId })
+                });
+                const data = await res.json();
+                const reply = data.reply || data.error;
+                const usedModel = data.modelUsed || model;
+
+                answerDiv.className = 'chat-answer';
+                answerDiv.innerHTML = markdownToHtml(reply);
+                answerLabel.textContent = `A:(${modelLabels[usedModel] || usedModel})`;
+
+                // Update chat history
+                chatHistory.push({ role: 'user', content: mq.QUERY });
+                chatHistory.push({ role: 'assistant', content: reply });
+
+                // Clear input
+                document.getElementById('input').value = '';
+                scrollToBottom();
+            } catch (err) {
+                answerDiv.className = 'chat-answer';
+                answerDiv.textContent = 'Error: ' + err.message;
+            }
+        }
+
     </script>
     <script>
         if ('serviceWorker' in navigator) {
