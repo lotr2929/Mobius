@@ -1,6 +1,8 @@
 import express from 'express';
 import fetch from 'node-fetch';
 import { createClient } from '@supabase/supabase-js';
+import { google } from 'googleapis';
+
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
 const app = express();
@@ -73,6 +75,58 @@ async function askWebSearch(messages) {
 async function saveConversation(userId, question, answer, model, topic) {
   await supabase.from('conversations').insert({ user_id: userId, question, answer, model, topic });
 }
+// ── Google OAuth ──────────────────────────────────────────────────────────────
+
+const oauth2Client = new google.auth.OAuth2(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  process.env.GOOGLE_REDIRECT_URI
+);
+
+const GOOGLE_SCOPES = [
+  'https://www.googleapis.com/auth/drive',
+  'https://www.googleapis.com/auth/gmail.modify',
+  'https://www.googleapis.com/auth/calendar',
+  'https://www.googleapis.com/auth/tasks'
+];
+
+app.get('/auth/google', (req, res) => {
+  const userId = req.query.userId;
+  const url = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: GOOGLE_SCOPES,
+    prompt: 'consent',
+    state: userId
+  });
+  res.redirect(url);
+});
+
+app.get('/auth/google/callback', async (req, res) => {
+  const { code, state: userId } = req.query;
+  try {
+    const { tokens } = await oauth2Client.getToken(code);
+    await supabase.from('google_tokens').upsert({
+      user_id: userId,
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      expiry_date: tokens.expiry_date
+    }, { onConflict: 'user_id' });
+    res.redirect('/?google=connected');
+  } catch (err) {
+    console.error('Google OAuth error:', err.message);
+    res.redirect('/?google=error');
+  }
+});
+
+app.get('/auth/google/status', async (req, res) => {
+  const { userId } = req.query;
+  const { data } = await supabase
+    .from('google_tokens')
+    .select('user_id')
+    .eq('user_id', userId)
+    .single();
+  res.json({ connected: !!data });
+});
 
 // ── Parser ────────────────────────────────────────────────────────────────────
 
