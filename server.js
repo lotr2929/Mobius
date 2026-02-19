@@ -128,6 +128,38 @@ app.get('/auth/google/status', async (req, res) => {
   res.json({ connected: !!data });
 });
 
+async function getGoogleClient(userId) {
+  const { data } = await supabase
+    .from('google_tokens')
+    .select('access_token, refresh_token, expiry_date')
+    .eq('user_id', userId)
+    .single();
+  if (!data) throw new Error('Google not connected for this user.');
+  const client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI
+  );
+  client.setCredentials({
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+    expiry_date: data.expiry_date
+  });
+  return client;
+}
+
+// Temporary test route — remove after testing
+app.get('/google/test', async (req, res) => {
+  const { userId } = req.query;
+  try {
+    const client = await getGoogleClient(userId);
+    const drive = google.drive({ version: 'v3', auth: client });
+    const response = await drive.files.list({ pageSize: 5, fields: 'files(id, name)' });
+    res.json({ files: response.data.files });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 // ── Parser ────────────────────────────────────────────────────────────────────
 
 function buildMobiusQuery(text, model, history) {
