@@ -14,16 +14,15 @@
     <style>
         body { 
             font-family: 'Century Gothic', 'Avenir', 'Segoe UI', 'Verdana', sans-serif; 
-            padding: 20px; 
-            max-width: 700px; 
+            padding: 10px; 
+            max-width: 800px; 
             margin: 0 auto;
             background: #e2dccd;
         }
-        textarea { 
+        textarea {
             width: 100%; 
             padding: 12px; 
             font-size: 16px; 
-            border: 1px solid #8d7c64;
             border-radius: 1px;
             box-sizing: border-box;
             font-family: 'Century Gothic', 'Avenir', 'Segoe UI', 'Verdana', sans-serif;
@@ -34,7 +33,7 @@
         .controls {
             display: flex;
             gap: 8px;
-            margin-top: 2px;
+            margin-top: 1px;
             align-items: center;
         }
         button { 
@@ -91,7 +90,7 @@
 
         #chatPanel { 
             margin-top: 4px; 
-            padding: 16px; 
+            padding: 8px; 
             background: #e2dccd;
             border: none;
             border-radius: 1px;
@@ -99,7 +98,7 @@
             max-height: 520px;
             overflow-y: auto;
         }
-        .chat-entry { margin-bottom: 16px; }
+        .chat-entry { margin-bottom: 4px; }
         .chat-query {
             color: #4a3728;
             font-weight: bold;
@@ -107,6 +106,8 @@
             white-space: pre-wrap;
         }
         .chat-answer { color: #2a2a2a; white-space: pre-wrap; }
+        .chat-answer h1, .chat-answer h2, .chat-answer h3 { margin: 4px 0; }
+        .chat-answer br + br { display: none; }
         .chat-label { font-size: 13px; color: #8d7c64; margin-bottom: 2px; }
         .chat-divider {
             border: none;
@@ -136,7 +137,7 @@
 
         /* ── Chat History List ── */
         .chat-history-list {
-            margin-top: 4px;
+            margin-top: 2px;
         }
         .chat-history-item {
             padding: 8px 10px;
@@ -379,7 +380,8 @@
                     ? `[${mq.INSTRUCTIONS.length} message(s) of chat history]`
                     : '[]',
                 QUERY: mq.QUERY,
-                FILES: mq.FILES.length > 0 ? mq.FILES.map(f => f.name) : []
+                FILES: mq.FILES.length > 0 ? mq.FILES.map(f => f.name) : [],
+                CONTEXT: mq.CONTEXT ? mq.CONTEXT : ''
             };
             return JSON.stringify(display, null, 2);
         }
@@ -561,7 +563,12 @@
             const text = document.getElementById('input').value.trim();
             if (!text) return;
 
-            const model = 'groq';
+            let model = 'groq';
+            const askMatch = text.match(/^Ask:\s*(\w+)/i);
+            if (askMatch) {
+                model = askMatch[1].toLowerCase();
+            }
+
             const panel = document.getElementById('chatPanel');
 
             addDivider();
