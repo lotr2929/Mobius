@@ -28,7 +28,7 @@ async function askGroq(messages) {
     body: JSON.stringify({ model: 'deepseek-r1-distill-llama-70b', messages })
   });
   const data = await r.json();
-  return data.choices[0].message.content || data.choices[0].message.reasoning_content || JSON.stringify(data);
+  return data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning_content || JSON.stringify(data);
 }
 
 async function askGemini(messages, imageParts = []) {
