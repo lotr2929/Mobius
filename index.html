@@ -95,7 +95,7 @@
             border: none;
             border-radius: 1px;
             box-shadow: none;
-            max-height: 520px;
+            max-height: calc(100vh - 220px);
             overflow-y: auto;
         }
         .chat-entry { margin-bottom: 4px; }
@@ -108,6 +108,10 @@
         .chat-answer { color: #2a2a2a; white-space: pre-wrap; }
         .chat-answer h1, .chat-answer h2, .chat-answer h3 { margin: 4px 0; }
         .chat-answer br + br { display: block; margin-top: 4px; }
+        .chat-answer table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 13px; }
+        .chat-answer th { background: #8d7c64; color: white; padding: 6px 10px; text-align: left; }
+        .chat-answer td { border: 1px solid #c9bfae; padding: 5px 10px; }
+        .chat-answer tr:nth-child(even) { background: #ede5d4; }
         .chat-label { font-size: 13px; color: #8d7c64; margin-bottom: 2px; }
         .chat-divider {
             border: none;
@@ -362,6 +366,15 @@
         }
 
         function markdownToHtml(text) {
+            // Process tables first (before line break conversion)
+            text = text.replace(/\|(.+)\|\n\|[-| :]+\|\n((?:\|.+\|\n?)+)/g, (match, header, rows) => {
+                const ths = header.split('|').filter(s => s.trim()).map(s => `<th>${s.trim()}</th>`).join('');
+                const trs = rows.trim().split('\n').map(row => {
+                    const tds = row.split('|').filter(s => s.trim()).map(s => `<td>${s.trim()}</td>`).join('');
+                    return `<tr>${tds}</tr>`;
+                }).join('');
+                return `<table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
+            });
             return text
                 .replace(/### (.*$)/gim, '<h3>$1</h3>')
                 .replace(/## (.*$)/gim, '<h2>$1</h2>')
