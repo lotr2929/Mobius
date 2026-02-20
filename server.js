@@ -25,7 +25,7 @@ async function askGroq(messages) {
       'Authorization': 'Bearer ' + process.env.GROQ_API_KEY,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ model: 'deepseek-r1-distill-llama-70b', messages })
+    body: JSON.stringify({ model: 'openai/gpt-oss-120b', messages })
   });
   const data = await r.json();
   return data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning_content || JSON.stringify(data);
