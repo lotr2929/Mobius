@@ -25,7 +25,7 @@ async function askGroq(messages) {
       'Authorization': 'Bearer ' + process.env.GROQ_API_KEY,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages })
+    body: JSON.stringify({ model: 'deepseek-r1-distill-llama-70b', messages })
   });
   const data = await r.json();
   return data.choices[0].message.content;
@@ -46,7 +46,7 @@ async function askGemini(messages, imageParts = []) {
       parts
     };
   });
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=' + key;
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + key;
   const r = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
