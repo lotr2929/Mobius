@@ -135,28 +135,6 @@ async function searchDirectory(dirHandle, query, results, path) {
   }
 }
 
-async function handleRead(args, output, attachFile) {
-  if (!await ensureAccess(output)) return;
-  const filename = args.trim();
-  if (!filename) { output('Usage: Read: filename'); return; }
-  output(`📖 Searching for "${filename}"...`);
-  const results = [];
-  await searchDirectory(rootHandle, filename.toLowerCase(), results, '');
-  const match = results.find(r => r.includes('📄') && r.toLowerCase().includes(filename.toLowerCase()));
-  if (!match) { output(`❌ File "${filename}" not found.`); return; }
-  const parts = match.replace('📄 ', '').split('/');
-  let dirHandle = rootHandle;
-  for (let i = 0; i < parts.length - 1; i++) {
-    dirHandle = await dirHandle.getDirectoryHandle(parts[i]);
-  }
-  const fileHandle = await dirHandle.getFileHandle(parts[parts.length - 1]);
-  const file = await fileHandle.getFile();
-  const text = await file.text();
-  attachFile({ name: file.name, mimeType: 'text/plain', base64: btoa(unescape(encodeURIComponent(text))) });
-  document.getElementById('input').value = '';
-  output(`✅ "${file.name}" attached (${text.length} chars). Type your query and Ask.`);
-}
-
 async function handleList(args, output) {
   if (!await ensureAccess(output)) return;
   const entries = [];
@@ -174,7 +152,6 @@ const COMMANDS = {
   'ask':    { requiresAccess: false, isAI: true  },
   'access': { requiresAccess: false, isAI: false, handler: (args, out) => handleAccess(out) },
   'find':   { requiresAccess: true,  isAI: false, handler: handleFind },
-  'read':   { requiresAccess: true,  isAI: false, handler: (args, out, attach) => handleRead(args, out, attach) },
   'list':   { requiresAccess: true,  isAI: false, handler: handleList },
 };
 
@@ -188,7 +165,7 @@ function detectCommand(text) {
   return { command, args: match[2].trim() };
 }
 
-async function runCommand(command, args, outputFn, attachFileFn) {
+async function runCommand(command, args, outputFn) {
   const cmd = COMMANDS[command];
   if (!cmd || cmd.isAI) return false;
   await cmd.handler(args, outputFn, attachFileFn);

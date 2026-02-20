@@ -586,7 +586,6 @@
                 panel.appendChild(entry);
                 scrollToBottom();
                 const outputFn = (msg) => { mqPreview.textContent = msg; scrollToBottom(); };
-                const attachFn = (file) => { attachedFiles.push(file); addFileChip(file); };
                 const handled = await runCommand(detected.command, detected.args, outputFn, attachFn);
                 if (handled) return;
             }
