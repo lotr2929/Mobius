@@ -107,7 +107,7 @@ async function handleResetAccess(output) {
   rootHandle = null;
   currentFolderHandle = null;
   await clearHandle();
-  output('✅ Access cleared. Use GiveAccess: to grant a new folder.');
+  output('✅ Access cleared. Use Access: to grant a new folder.');
 }
 
 async function handleFolder(args, output) {
@@ -207,7 +207,7 @@ async function handleList(args, output) {
 
 const COMMANDS = {
   'ask':         { requiresAccess: false, isAI: true  },
-  'giveaccess':  { requiresAccess: false, isAI: false, handler: (args, out) => handleGiveAccess(out) },
+  'access':  { requiresAccess: false, isAI: false, handler: (args, out) => handleGiveAccess(out) },
   'resetaccess': { requiresAccess: false, isAI: false, handler: (args, out) => handleResetAccess(out) },
   'folder':      { requiresAccess: true,  isAI: false, handler: handleFolder },
   'find':        { requiresAccess: true,  isAI: false, handler: handleFind },
