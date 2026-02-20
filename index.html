@@ -256,9 +256,84 @@
         // Context menu state
         let ctxSession = null;
 
+        // ── Context Payload Functions ─────────────────────────────────────────
+        async function buildContextPayload() {
+          const ctx = {};
+          const now = new Date();
+          ctx.datetime = now.toLocaleString('en-AU', { hour12: false });
+          ctx.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          ctx.utc_offset = (() => {
+            const off = -now.getTimezoneOffset();
+            const sign = off >= 0 ? '+' : '-';
+            const h = String(Math.floor(Math.abs(off) / 60)).padStart(2, '0');
+            const m = String(Math.abs(off) % 60).padStart(2, '0');
+            return `UTC${sign}${h}:${m}`;
+          })();
+          ctx.locale = navigator.language || navigator.languages?.[0] || 'unknown';
+          const ua = navigator.userAgent;
+          if (/Windows NT 10/.test(ua))        ctx.os = 'Windows 10/11';
+          else if (/Mac OS X/.test(ua))         ctx.os = 'macOS ' + (ua.match(/Mac OS X ([\d_]+)/)?.[1]?.replace(/_/g, '.') || '');
+          else if (/Android/.test(ua))          ctx.os = 'Android ' + (ua.match(/Android ([\d.]+)/)?.[1] || '');
+          else if (/iPhone|iPad/.test(ua))      ctx.os = 'iOS ' + (ua.match(/OS ([\d_]+)/)?.[1]?.replace(/_/g, '.') || '');
+          else if (/Linux/.test(ua))            ctx.os = 'Linux';
+          else                                   ctx.os = 'Unknown OS';
+          if (/Edg\//.test(ua))          ctx.browser = 'Edge ' + (ua.match(/Edg\/([\d.]+)/)?.[1] || '');
+          else if (/Chrome\//.test(ua))  ctx.browser = 'Chrome ' + (ua.match(/Chrome\/([\d.]+)/)?.[1] || '');
+          else if (/Firefox\//.test(ua)) ctx.browser = 'Firefox ' + (ua.match(/Firefox\/([\d.]+)/)?.[1] || '');
+          else if (/Safari\//.test(ua))  ctx.browser = 'Safari ' + (ua.match(/Version\/([\d.]+)/)?.[1] || '');
+          else                            ctx.browser = 'Unknown Browser';
+          const isMobile = /Mobi|Android|iPhone|iPad/.test(ua);
+          const isTablet = /iPad|Tablet/.test(ua) || (isMobile && Math.min(screen.width, screen.height) > 600);
+          ctx.device_type = isTablet ? 'tablet' : isMobile ? 'mobile' : 'desktop';
+          if (!isMobile) ctx.screen_resolution = `${screen.width}x${screen.height}`;
+          ctx.touch = ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+          ctx.dark_mode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          ctx.online = navigator.onLine;
+          const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+          if (conn) {
+            if (conn.type)     ctx.connection_type = conn.type;
+            if (conn.downlink) ctx.bandwidth_mbps  = conn.downlink;
+            if (conn.rtt)      ctx.latency_ms      = conn.rtt;
+          }
+          try {
+            const geo = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(3000) });
+            if (geo.ok) {
+              const g = await geo.json();
+              if (!g.error) {
+                ctx.city     = g.city        || undefined;
+                ctx.region   = g.region      || undefined;
+                ctx.country  = g.country_name || undefined;
+                ctx.currency = g.currency    || undefined;
+              }
+            }
+          } catch { /* geolocation unavailable */ }
+          Object.keys(ctx).forEach(k => ctx[k] === undefined && delete ctx[k]);
+          return ctx;
+        }
+
+        function formatContextForPrompt(ctx) {
+          if (!ctx || Object.keys(ctx).length === 0) return '';
+          const lines = ['[User Environment]'];
+          if (ctx.datetime)          lines.push(`Date/Time: ${ctx.datetime}`);
+          if (ctx.timezone)          lines.push(`Timezone: ${ctx.timezone} (${ctx.utc_offset})`);
+          if (ctx.locale)            lines.push(`Locale: ${ctx.locale}`);
+          if (ctx.city)              lines.push(`Location: ${ctx.city}, ${ctx.region}, ${ctx.country}`);
+          if (ctx.currency)          lines.push(`Currency: ${ctx.currency}`);
+          if (ctx.os)                lines.push(`OS: ${ctx.os}`);
+          if (ctx.browser)           lines.push(`Browser: ${ctx.browser}`);
+          if (ctx.device_type)       lines.push(`Device: ${ctx.device_type}`);
+          if (ctx.screen_resolution) lines.push(`Screen: ${ctx.screen_resolution}`);
+          if (ctx.dark_mode != null) lines.push(`Dark mode: ${ctx.dark_mode}`);
+          if (ctx.online != null)    lines.push(`Online: ${ctx.online}`);
+          if (ctx.connection_type)   lines.push(`Connection: ${ctx.connection_type}`);
+          if (ctx.bandwidth_mbps)    lines.push(`Bandwidth: ${ctx.bandwidth_mbps} Mbps`);
+          if (ctx.latency_ms)        lines.push(`Latency: ${ctx.latency_ms} ms`);
+          return lines.join('\n');
+        }
+
         // Environment context payload (loaded once on startup)
         let mobiusContext = null;
-        buildContextPayload().then(ctx => { mobiusContext = ctx; });
+        buildContextPayload().then(ctx => { mobiusContext = formatContextForPrompt(ctx); });
 
         const modelLabels = {
             groq: 'Groq',
