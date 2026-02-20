@@ -18,11 +18,18 @@ set TIMESTAMP=%TIMESTAMP: =0%
 set ZIPNAME=Mobius-backup.zip
 echo Backup created: %TIMESTAMP% > backup-timestamp.txt
 
+echo Staging all new files...
+git add .
+
 echo Creating %ZIPNAME%...
-echo (Skipping node_modules, .git, .gif files, and secrets folder)
+echo (Using git ls-files to respect .gitignore)
 echo.
 
-powershell -Command "Compress-Archive -Path (Get-ChildItem -Path '.' -Recurse | Where-Object { $_.FullName -notmatch '\\node_modules\\' -and $_.FullName -notmatch '\\.git\\' -and $_.FullName -notmatch '\\secrets\\' -and $_.Extension -ne '.gif' -and -not $_.PSIsContainer } | Select-Object -ExpandProperty FullName) -DestinationPath '%ZIPNAME%' -Force"
+REM Delete old zip first
+if exist "%ZIPNAME%" del "%ZIPNAME%"
+
+REM Use git ls-files to get tracked files and zip them
+git ls-files | powershell -Command "$files = $input | ForEach-Object { $_.Trim() } | Where-Object { $_ }; Compress-Archive -Path $files -DestinationPath '%ZIPNAME%' -Force"
 
 if %errorlevel% neq 0 (
     echo ERROR: Zip creation failed!

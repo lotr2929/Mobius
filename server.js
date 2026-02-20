@@ -178,20 +178,21 @@ app.get('/api/chat-history', async (req, res) => {
 
 // ── Parser ────────────────────────────────────────────────────────────────────
 
-function buildMobiusQuery(text, model, history) {
+function buildMobiusQuery(text, model, history, context) {
   return {
     ASK: model,
     INSTRUCTIONS: history || [],
     QUERY: text,
-    FILES: []
+    FILES: [],
+    CONTEXT: context || ''
   };
 }
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 app.post('/parse', (req, res) => {
-  const { text, model, history } = req.body;
-  const mobius_query = buildMobiusQuery(text, model, history);
+  const { text, model, history, context } = req.body;
+  const mobius_query = buildMobiusQuery(text, model, history, context);
 
   const lower = text.toLowerCase();
 
@@ -224,10 +225,11 @@ app.post('/upload', upload.single('file'), (req, res) => {
 
 app.post('/ask', async (req, res) => {
   const { mobius_query, userId, topic } = req.body;
-  const { ASK, INSTRUCTIONS, QUERY, FILES } = mobius_query;
+  const { ASK, INSTRUCTIONS, QUERY, FILES, CONTEXT } = mobius_query;
 
   try {
     const messages = [...INSTRUCTIONS, { role: 'user', content: QUERY }];
+    if (CONTEXT) messages.unshift({ role: 'system', content: CONTEXT });
     let reply;
     let modelUsed = ASK;
 

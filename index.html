@@ -34,7 +34,7 @@
         .controls {
             display: flex;
             gap: 8px;
-            margin-top: 6px;
+            margin-top: 2px;
             align-items: center;
         }
         button { 
@@ -90,12 +90,12 @@
         .file-chip-remove:hover { color: #3a2e22; }
 
         #chatPanel { 
-            margin-top: 20px; 
+            margin-top: 4px; 
             padding: 16px; 
-            background: #f5eedd;
-            border: 1px solid #8d7c64;
+            background: #e2dccd;
+            border: none;
             border-radius: 1px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            box-shadow: none;
             max-height: 520px;
             overflow-y: auto;
         }
@@ -255,6 +255,10 @@
 
         // Context menu state
         let ctxSession = null;
+
+        // Environment context payload (loaded once on startup)
+        let mobiusContext = null;
+        buildContextPayload().then(ctx => { mobiusContext = ctx; });
 
         const modelLabels = {
             groq: 'Groq',
@@ -515,7 +519,7 @@
                 const res = await fetch('/parse', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text, model, history: chatHistory })
+                    body: JSON.stringify({ text, model, history: chatHistory, context: mobiusContext })
                 });
                 const data = await res.json();
                 pendingMobiusQuery = data.mobius_query;
