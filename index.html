@@ -565,6 +565,26 @@
             const userId = localStorage.getItem('mobius_user_id');
             if (!userId) { window.location.href = '/login'; return; }
 
+            // Handle Access: immediately on tap — must be synchronous for mobile Chrome
+            const text = document.getElementById('input').value.trim();
+            const detected = detectCommand(text);
+            if (detected && detected.command === 'access') {
+                const panel = document.getElementById('chatPanel');
+                addDivider();
+                const entry = document.createElement('div');
+                entry.className = 'chat-entry';
+                entry.innerHTML = `<div class="chat-query">Q: ${escapeHtml(text)}</div>`;
+                const mqPreview = document.createElement('div');
+                mqPreview.className = 'mq-block';
+                mqPreview.textContent = 'Waiting for folder selection...';
+                entry.appendChild(mqPreview);
+                panel.appendChild(entry);
+                scrollToBottom();
+                const outputFn = (msg) => { mqPreview.textContent = msg; scrollToBottom(); };
+                await handleAccess(outputFn);
+                return;
+            }
+
             if (pendingMobiusQuery) {
                 await executeQuery(userId);
             } else {
