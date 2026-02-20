@@ -220,7 +220,7 @@
         <div class="ctx-item" onclick="ctxAction('load')">📂 Open chat</div>
         <div class="ctx-item" onclick="ctxAction('copy-summary')">📋 Copy summary</div>
         <div class="ctx-item" onclick="ctxAction('copy-full')">📄 Copy full chat</div>
-        <div class="ctx-item" onclick="ctxAction('paste-context')">💬 Paste as context</div>
+        <div class="ctx-item" onclick="ctxAction('copy-context')">💬 Copy as context</div>
     </div>
     
     <script>
@@ -446,7 +446,7 @@
             } else if (action === 'copy-full') {
                 const full = buildFullText(ctxSession);
                 navigator.clipboard.writeText(full).then(() => alert('Full chat copied!'));
-            } else if (action === 'paste-context') {
+            } else if (action === 'copy-context') {
                 const summary = buildSummary(ctxSession);
                 const filename = 'context-' + new Date(ctxSession.started_at).toISOString().slice(0,10) + '.txt';
                 const blob = new Blob([summary], { type: 'text/plain' });
@@ -563,11 +563,7 @@
             const text = document.getElementById('input').value.trim();
             if (!text) return;
 
-            let model = 'groq';
-            const askMatch = text.match(/^Ask:\s*(\w+)/i);
-            if (askMatch) {
-                model = askMatch[1].toLowerCase();
-            }
+            let model = getAskModel(text) || 'groq';
 
             const panel = document.getElementById('chatPanel');
 
@@ -583,6 +579,17 @@
             mqPreview.className = 'mq-block';
             mqPreview.textContent = 'Building...';
             entry.appendChild(mqPreview);
+
+            // Mobius handles commands before passing anything to AI
+            const detected = detectCommand(text);
+            if (detected && detected.command !== 'ask') {
+                panel.appendChild(entry);
+                scrollToBottom();
+                const outputFn = (msg) => { mqPreview.textContent = msg; scrollToBottom(); };
+                const attachFn = (file) => { attachedFiles.push(file); addFileChip(file); };
+                const handled = await runCommand(detected.command, detected.args, outputFn, attachFn);
+                if (handled) return;
+            }
 
             // Show image previews if any images attached
             for (const f of attachedFiles) {
@@ -749,6 +756,7 @@
         }
 
     </script>
+    <script src="commands.js"></script>
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/service-worker.js');
