@@ -58,6 +58,19 @@ async function askGemini(messages, imageParts = []) {
   return data.candidates[0].content.parts[0].text;
 }
 
+async function askMistral(messages) {
+  const r = await fetch('https://api.mistral.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + process.env.MISTRAL_API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ model: 'codestral-latest', messages })
+  });
+  const data = await r.json();
+  return data.choices?.[0]?.message?.content || JSON.stringify(data);
+}
+
 async function askWebSearch(messages) {
   const tavilyKey = process.env.TAVILY_API_KEY;
   if (!tavilyKey) throw new Error('TAVILY_API_KEY is not set on the server.');
@@ -257,6 +270,9 @@ app.post('/ask', async (req, res) => {
       // Route to Gemini if explicitly chosen or if images attached
       reply = await askGemini(messages, imageParts);
       modelUsed = 'gemini';
+    } else if (ASK === 'mistral' || ASK === 'codestral') {
+      reply = await askMistral(messages);
+      modelUsed = 'mistral';
     } else if (ASK === 'websearch') {
       // Append non-image file text to query if present
       if (hasNonImageFiles) {
