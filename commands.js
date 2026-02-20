@@ -1,7 +1,6 @@
 // ── Mobius Command Registry ───────────────────────────────────────────────────
 // Client-side command handlers for colon-prefix commands.
-// index.html calls detectCommand(text) to check if input is a command,
-// then calls runCommand(command, args, callbacks) to execute it.
+// index.html calls detectCommand(text) and runCommand() to execute commands.
 // Add new commands here without touching index.html.
 
 // ── IndexedDB storage for folder handle ──────────────────────────────────────
@@ -50,101 +49,75 @@ async function clearHandle() {
 
 // ── Access management ─────────────────────────────────────────────────────────
 
-let rootHandle = null; // in-memory cache for this session
-let currentFolderHandle = null; // scoped by Folder: command
+let rootHandle = null;
 
 async function ensureAccess(output) {
-  // Try in-memory first
   if (rootHandle) return true;
 
   // Try restoring from IndexedDB
   try {
     const stored = await loadHandle();
     if (stored) {
-      // Verify permission is still granted
-      const perm = await stored.queryPermission({ mode: 'read' });
+      let perm = await stored.queryPermission({ mode: 'read' });
+      if (perm !== 'granted') {
+        perm = await stored.requestPermission({ mode: 'read' });
+      }
       if (perm === 'granted') {
         rootHandle = stored;
-        currentFolderHandle = stored;
-        return true;
-      }
-      // Try to re-request permission
-      const req = await stored.requestPermission({ mode: 'read' });
-      if (req === 'granted') {
-        rootHandle = stored;
-        currentFolderHandle = stored;
         return true;
       }
     }
-  } catch { /* fall through to prompt */ }
+  } catch { /* fall through */ }
 
   // No stored handle — prompt user
-  output('No folder access granted. Running GiveAccess...');
-  return await handleGiveAccess(output);
+  output('No folder access granted. Running Access...');
+  return await handleAccess(output);
 }
 
 // ── Command handlers ──────────────────────────────────────────────────────────
 
-async function handleGiveAccess(output) {
+async function handleAccess(output) {
   if (!('showDirectoryPicker' in window)) {
-    output('❌ File System Access API not supported in this browser. Use Chrome or Edge.');
+    output('❌ File System Access API not supported. Use Chrome or Edge on desktop/Android.');
     return false;
   }
   try {
+    // Clear any previous root
+    rootHandle = null;
+    await clearHandle();
+
     const handle = await window.showDirectoryPicker({ mode: 'read' });
     rootHandle = handle;
-    currentFolderHandle = handle;
     await saveHandle(handle);
-    output(`✅ Access granted to: ${handle.name}`);
+
+    // Clear input box
+    document.getElementById('input').value = '';
+
+    // Auto-list contents
+    const entries = [];
+    for await (const [name, h] of handle.entries()) {
+      entries.push(`${h.kind === 'directory' ? '📁' : '📄'} ${name}`);
+    }
+    entries.sort();
+    output(`✅ Access granted to: ${handle.name}\n\n📁 Contents (${entries.length} items):\n` + entries.join('\n'));
     return true;
   } catch (err) {
     if (err.name !== 'AbortError') output('❌ Access denied: ' + err.message);
+    else output('❌ Folder selection cancelled.');
     return false;
   }
-}
-
-async function handleResetAccess(output) {
-  rootHandle = null;
-  currentFolderHandle = null;
-  await clearHandle();
-  output('✅ Access cleared. Use Access: to grant a new folder.');
-}
-
-async function handleFolder(args, output) {
-  if (!await ensureAccess(output)) return;
-  const path = args.trim();
-  if (!path) {
-    output(`📁 Current folder: ${(currentFolderHandle || rootHandle).name}`);
-    return;
-  }
-  // Navigate to subfolder by path segments
-  const parts = path.replace(/\\/g, '/').split('/').filter(Boolean);
-  let handle = rootHandle;
-  for (const part of parts) {
-    try {
-      handle = await handle.getDirectoryHandle(part);
-    } catch {
-      output(`❌ Folder not found: ${part}`);
-      return;
-    }
-  }
-  currentFolderHandle = handle;
-  output(`📁 Scoped to folder: ${handle.name}`);
 }
 
 async function handleFind(args, output) {
   if (!await ensureAccess(output)) return;
   const query = args.trim().toLowerCase();
   if (!query) { output('Usage: Find: filename'); return; }
-
-  const searchRoot = currentFolderHandle || rootHandle;
-  output(`🔍 Searching in "${searchRoot.name}" for "${query}"...`);
-
+  output(`🔍 Searching "${rootHandle.name}" for "${query}"...`);
   const results = [];
-  await searchDirectory(searchRoot, query, results, '');
-
+  await searchDirectory(rootHandle, query, results, '');
+  document.getElementById('input').value = '';
   if (results.length === 0) {
-    output(`No files or folders matching "${query}" found.`);
+    output(`No matches found for "${query}".`);
   } else {
     output(`Found ${results.length} result(s):\n` + results.join('\n'));
   }
@@ -166,59 +139,47 @@ async function handleRead(args, output, attachFile) {
   if (!await ensureAccess(output)) return;
   const filename = args.trim();
   if (!filename) { output('Usage: Read: filename'); return; }
-
-  const searchRoot = currentFolderHandle || rootHandle;
-  output(`📖 Looking for "${filename}"...`);
-
+  output(`📖 Searching for "${filename}"...`);
   const results = [];
-  await searchDirectory(searchRoot, filename.toLowerCase(), results, '');
-  const match = results.find(r => r.includes(filename));
-
+  await searchDirectory(rootHandle, filename.toLowerCase(), results, '');
+  const match = results.find(r => r.includes('📄') && r.toLowerCase().includes(filename.toLowerCase()));
   if (!match) { output(`❌ File "${filename}" not found.`); return; }
-
-  // Navigate to file
-  const parts = match.replace(/^📄 /, '').split('/');
-  let dirHandle = searchRoot;
+  const parts = match.replace('📄 ', '').split('/');
+  let dirHandle = rootHandle;
   for (let i = 0; i < parts.length - 1; i++) {
     dirHandle = await dirHandle.getDirectoryHandle(parts[i]);
   }
   const fileHandle = await dirHandle.getFileHandle(parts[parts.length - 1]);
   const file = await fileHandle.getFile();
   const text = await file.text();
-
-  // Attach as file chip via callback
-  attachFile({ name: file.name, mimeType: 'text/plain', content: text });
-  output(`✅ "${file.name}" attached (${text.length} chars).`);
+  attachFile({ name: file.name, mimeType: 'text/plain', base64: btoa(unescape(encodeURIComponent(text))) });
+  document.getElementById('input').value = '';
+  output(`✅ "${file.name}" attached (${text.length} chars). Type your query and Ask.`);
 }
 
 async function handleList(args, output) {
   if (!await ensureAccess(output)) return;
-  const searchRoot = currentFolderHandle || rootHandle;
-  output(`📁 Contents of "${searchRoot.name}":`);
   const entries = [];
-  for await (const [name, handle] of searchRoot.entries()) {
+  for await (const [name, handle] of rootHandle.entries()) {
     entries.push(`${handle.kind === 'directory' ? '📁' : '📄'} ${name}`);
   }
   entries.sort();
-  output(entries.join('\n'));
+  document.getElementById('input').value = '';
+  output(`📁 "${rootHandle.name}" (${entries.length} items):\n` + entries.join('\n'));
 }
 
 // ── Command registry ──────────────────────────────────────────────────────────
 
 const COMMANDS = {
-  'ask':         { requiresAccess: false, isAI: true  },
-  'access':  { requiresAccess: false, isAI: false, handler: (args, out) => handleGiveAccess(out) },
-  'resetaccess': { requiresAccess: false, isAI: false, handler: (args, out) => handleResetAccess(out) },
-  'folder':      { requiresAccess: true,  isAI: false, handler: handleFolder },
-  'find':        { requiresAccess: true,  isAI: false, handler: handleFind },
-  'read':        { requiresAccess: true,  isAI: false, handler: (args, out, attach) => handleRead(args, out, attach) },
-  'list':        { requiresAccess: true,  isAI: false, handler: handleList },
+  'ask':    { requiresAccess: false, isAI: true  },
+  'access': { requiresAccess: false, isAI: false, handler: (args, out) => handleAccess(out) },
+  'find':   { requiresAccess: true,  isAI: false, handler: handleFind },
+  'read':   { requiresAccess: true,  isAI: false, handler: (args, out, attach) => handleRead(args, out, attach) },
+  'list':   { requiresAccess: true,  isAI: false, handler: handleList },
 };
 
 // ── Public API (called by index.html) ─────────────────────────────────────────
 
-// Detects if text starts with a known command prefix e.g. "Find: something"
-// Returns { command, args } or null if not a command
 function detectCommand(text) {
   const match = text.match(/^(\w+):\s*(.*)/s);
   if (!match) return null;
@@ -227,7 +188,6 @@ function detectCommand(text) {
   return { command, args: match[2].trim() };
 }
 
-// Runs a non-AI command, returns true if handled, false if should go to AI
 async function runCommand(command, args, outputFn, attachFileFn) {
   const cmd = COMMANDS[command];
   if (!cmd || cmd.isAI) return false;
@@ -235,7 +195,6 @@ async function runCommand(command, args, outputFn, attachFileFn) {
   return true;
 }
 
-// Returns the model override if Ask: was used, otherwise null
 function getAskModel(text) {
   const match = text.match(/^Ask:\s*(\w+)/i);
   return match ? match[1].toLowerCase() : null;

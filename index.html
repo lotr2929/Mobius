@@ -107,7 +107,7 @@
         }
         .chat-answer { color: #2a2a2a; white-space: pre-wrap; }
         .chat-answer h1, .chat-answer h2, .chat-answer h3 { margin: 4px 0; }
-        .chat-answer br + br { display: none; }
+        .chat-answer br + br { display: block; margin-top: 3px; }
         .chat-label { font-size: 13px; color: #8d7c64; margin-bottom: 2px; }
         .chat-divider {
             border: none;
@@ -564,7 +564,7 @@
             if (!text) return;
 
             let model = getAskModel(text) || 'groq';
-
+            const cleanText = text.replace(/^Ask:\s*\w+[\.\,]?\s*/i, '').trim() || text;
             const panel = document.getElementById('chatPanel');
 
             addDivider();
@@ -608,7 +608,7 @@
                 const res = await fetch('/parse', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text, model, history: chatHistory, context: mobiusContext })
+                    body: JSON.stringify({ text: cleanText, model, history: chatHistory, context: mobiusContext })
                 });
                 const data = await res.json();
                 pendingMobiusQuery = data.mobius_query;
