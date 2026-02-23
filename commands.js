@@ -187,7 +187,7 @@ function detectCommand(text) {
 async function runCommand(command, args, outputFn) {
   const cmd = COMMANDS[command];
   if (!cmd || cmd.isAI) return false;
-  await cmd.handler(args, outputFn, attachFileFn);
+  await cmd.handler(args, attachFileFn);
   return true;
 }
 
