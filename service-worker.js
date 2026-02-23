@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mobius-20262302-1419';
+const CACHE_NAME = 'mobius-20262302-1653';
 const urlsToCache = [
   '/',
   '/index.html',

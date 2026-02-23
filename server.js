@@ -71,20 +71,35 @@ async function askMistral(messages) {
   return data.choices?.[0]?.message?.content || JSON.stringify(data);
 }
 
-async function askWithFallback(messages, imageParts = []) {
-  try {
-    const result = await askGroq(messages);
-    // Groq sometimes returns an error object instead of throwing
-    if (typeof result === 'string' && result.includes('"error"')) {
-      const parsed = JSON.parse(result);
-      if (parsed.error) throw new Error(parsed.error.message || JSON.stringify(parsed.error));
+const MODEL_CHAIN = ['groq', 'gemini', 'mistral'];
+
+async function askWithFallback(messages, imageParts = [], startModel = 'groq') {
+  const startIdx = MODEL_CHAIN.indexOf(startModel);
+  const chain    = startIdx !== -1 ? MODEL_CHAIN.slice(startIdx) : MODEL_CHAIN;
+
+  let lastErr = null;
+  for (const model of chain) {
+    try {
+      let result;
+      if (model === 'groq') {
+        result = await askGroq(messages);
+        if (typeof result === 'string' && result.includes('"error"')) {
+          const parsed = JSON.parse(result);
+          if (parsed.error) throw new Error(parsed.error.message || JSON.stringify(parsed.error));
+        }
+      } else if (model === 'gemini') {
+        result = await askGemini(messages, imageParts);
+      } else if (model === 'mistral') {
+        result = await askMistral(messages);
+      }
+      const label = model === startModel ? model : model + ' (fallback from ' + startModel + ')';
+      return { reply: result, modelUsed: label };
+    } catch (err) {
+      console.warn('[Mobius] ' + model + ' failed:', err.message);
+      lastErr = err;
     }
-    return { reply: result, modelUsed: 'groq' };
-  } catch (err) {
-    console.warn('[Mobius] Groq failed, falling back to Gemini:', err.message);
-    const result = await askGemini(messages, imageParts);
-    return { reply: result, modelUsed: 'gemini - fallback' };
   }
+  throw lastErr || new Error('All models failed');
 }
 
 async function askWebSearch(messages) {
@@ -221,25 +236,9 @@ function buildMobiusQuery(text, model, history, context) {
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 app.post('/parse', (req, res) => {
+  // Pure JS build — no keyword sniffing. Routing is decided client-side via commands.
   const { text, model, history, context } = req.body;
   const mobius_query = buildMobiusQuery(text, model, history, context);
-
-  const explicitModels = ['groq', 'gemini', 'mistral', 'codestral', 'websearch', 'chat_history', 'google_drive', 'google_tasks', 'google_calendar', 'google_gmail'];
-  if (!model || !explicitModels.includes(model.toLowerCase())) {
-    const lower = text.toLowerCase();
-    if (lower.includes('chat history') || lower.includes('conversation history')) {
-      mobius_query.ASK = 'chat_history';
-    } else if (lower.includes('drive') || lower.includes('my files') || lower.includes('google drive')) {
-      mobius_query.ASK = 'google_drive';
-    } else if (lower.includes('task') || lower.includes('todo') || lower.includes('to-do')) {
-      mobius_query.ASK = 'google_tasks';
-    } else if (lower.includes('calendar') || lower.includes('schedule') || lower.includes('events')) {
-      mobius_query.ASK = 'google_calendar';
-    } else if (lower.includes('email') || lower.includes('gmail') || lower.includes('inbox')) {
-      mobius_query.ASK = 'google_gmail';
-    }
-  }
-
   res.json({ mobius_query });
 });
 
@@ -312,7 +311,7 @@ app.post('/ask', async (req, res) => {
           .join('\n\n');
         messages[messages.length - 1].content += '\n\n' + fileTexts;
       }
-      const { reply: fallbackReply, modelUsed: fallbackModel } = await askWithFallback(messages);
+      const { reply: fallbackReply, modelUsed: fallbackModel } = await askWithFallback(messages, [], ASK);
       reply = fallbackReply;
       modelUsed = fallbackModel;
     }
