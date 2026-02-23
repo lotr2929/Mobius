@@ -126,7 +126,7 @@
         <div class="page active" id="page-0">
             <div class="page-inner">
                 <h1>Mobius Help</h1>
-                <div class="subtitle">Version 1.0 &nbsp;|&nbsp; February 2026</div>
+                <div class="subtitle">Version 1.1 &nbsp;|&nbsp; February 2026</div>
                 <h2>Contents</h2>
                 <ol class="toc-list">
                     <li><a href="#" onclick="goTo(1)">1. Overview</a></li>
@@ -139,9 +139,13 @@
                         <ol class="toc-sub">
                             <li><a href="#" onclick="goTo(7); setTimeout(()=>document.getElementById('cmd-access').scrollIntoView({behavior:'smooth'}),50)">Access:</a></li>
                             <li><a href="#" onclick="goTo(7); setTimeout(()=>document.getElementById('cmd-ask').scrollIntoView({behavior:'smooth'}),50)">Ask:</a></li>
+                            <li><a href="#" onclick="goTo(7); setTimeout(()=>document.getElementById('cmd-date').scrollIntoView({behavior:'smooth'}),50)">Date</a></li>
+                            <li><a href="#" onclick="goTo(7); setTimeout(()=>document.getElementById('cmd-device').scrollIntoView({behavior:'smooth'}),50)">Device</a></li>
                             <li><a href="#" onclick="goTo(7); setTimeout(()=>document.getElementById('cmd-find').scrollIntoView({behavior:'smooth'}),50)">Find:</a></li>
-                            <li><a href="#" onclick="goTo(7); setTimeout(()=>document.getElementById('cmd-list').scrollIntoView({behavior:'smooth'}),50)">List:</a></li>
-                            <li><a href="#" onclick="goTo(7); setTimeout(()=>document.getElementById('cmd-history').scrollIntoView({behavior:'smooth'}),50)">History:</a></li>
+                            <li><a href="#" onclick="goTo(7); setTimeout(()=>document.getElementById('cmd-history').scrollIntoView({behavior:'smooth'}),50)">History</a></li>
+                            <li><a href="#" onclick="goTo(7); setTimeout(()=>document.getElementById('cmd-list').scrollIntoView({behavior:'smooth'}),50)">List</a></li>
+                            <li><a href="#" onclick="goTo(7); setTimeout(()=>document.getElementById('cmd-location').scrollIntoView({behavior:'smooth'}),50)">Location</a></li>
+                            <li><a href="#" onclick="goTo(7); setTimeout(()=>document.getElementById('cmd-time').scrollIntoView({behavior:'smooth'}),50)">Time</a></li>
                         </ol>
                     </li>
                     <li><a href="#" onclick="goTo(8)">8. History</a></li>
@@ -204,15 +208,20 @@
         <div class="page" id="page-5">
             <div class="page-inner">
                 <h2>5. Choosing an AI Model</h2>
-                <p>By default, Mobius routes queries to Groq. To direct a query to a specific model, use the <code>Ask:</code> prefix:</p>
+                <p>Mobius remembers the last model you used and applies it automatically to subsequent queries. The default on first use is Groq.</p>
+                <p>To switch models, use the <code>Ask:</code> prefix. This both routes the current query <em>and</em> saves that model as your new default:</p>
                 <table>
                     <tr><th>Command</th><th>Routes to</th></tr>
+                    <tr><td><code>Ask: Groq</code></td><td>Groq (initial default)</td></tr>
                     <tr><td><code>Ask: Gemini</code></td><td>Google Gemini 2.5 Flash</td></tr>
-                    <tr><td><code>Ask: Groq</code></td><td>Groq (default)</td></tr>
                     <tr><td><code>Ask: Mistral</code></td><td>Mistral Codestral (coding)</td></tr>
                     <tr><td><code>Ask: Websearch</code></td><td>Tavily web search + Groq</td></tr>
                 </table>
                 <p><strong>Example:</strong> <code>Ask: Gemini. What are the best AI models available today?</code></p>
+                <h3>Automatic Fallback</h3>
+                <p>If a model returns an error or runs out of tokens, Mobius automatically tries the next model in the chain:</p>
+                <p style="text-align:center; font-family:monospace; font-size:14px;">Groq &rarr; Gemini &rarr; Mistral</p>
+                <p>The chain wraps from your current model, so starting on Gemini gives: Gemini &rarr; Mistral &rarr; Groq. The response panel shows which model was actually used, e.g. <code>A:(Gemini — fallback from Groq)</code>. A fallback does not change your saved default.</p>
                 <div class="note">The Ask: prefix and model name are stripped before sending — only your actual question reaches the AI.</div>
             </div>
         </div>
@@ -235,15 +244,16 @@
             <div class="page-inner">
                 <h2>7. Mobius Commands</h2>
                 <p>Colon-prefix commands are handled by Mobius before any AI is involved. They do not go to the AI.</p>
+                <p style="font-size:13px; color:#6b4f3a; margin-bottom:12px;">Single-word commands (Date, Time, Location, Device, Access, List, History) work without a colon — just type the word and press Ask.</p>
                 <div class="commands-scroll">
 
                     <div class="cmd-entry" id="cmd-access">
-                        <h3><span class="cmd">Access:</span></h3>
-                        <p>Grants Mobius access to a folder on your device.</p>
+                        <h3><span class="cmd">Access</span></h3>
+                        <p>Grants Mobius read access to a folder on your device. Required before using Find or List.</p>
                         <ul>
-                            <li><strong>Usage:</strong> Type <code>Access:</code> and press Ask.</li>
+                            <li><strong>Usage:</strong> Type <code>Access</code> or <code>Access:</code> and press Ask.</li>
                             <li>A folder picker opens. Navigate to your root folder and click Select Folder.</li>
-                            <li>Access is saved between sessions. Run <code>Access:</code> again to change folder.</li>
+                            <li>Access is saved between sessions. Run again to change folder.</li>
                             <li>After granting access, folder contents are automatically listed.</li>
                             <li><strong>Browser support:</strong> Chrome and Edge on desktop and Android only.</li>
                         </ul>
@@ -251,47 +261,95 @@
 
                     <div class="cmd-entry" id="cmd-ask">
                         <h3><span class="cmd">Ask:</span></h3>
-                        <p>Routes your query to a specific AI model.</p>
+                        <p>Routes your query to a specific AI model and saves it as your new default.</p>
                         <ul>
                             <li><strong>Usage:</strong> <code>Ask: modelname. your question</code></li>
                             <li><strong>Example:</strong> <code>Ask: Gemini. What are the best AI models today?</code></li>
+                            <li>Without a model name, uses your last saved model.</li>
                         </ul>
                         <table>
                             <tr><th>Model</th><th>Routes to</th></tr>
+                            <tr><td><code>Groq</code></td><td>Groq (initial default)</td></tr>
                             <tr><td><code>Gemini</code></td><td>Google Gemini 2.5 Flash</td></tr>
-                            <tr><td><code>Groq</code></td><td>Groq (default)</td></tr>
-                            <tr><td><code>Websearch</code></td><td>Tavily + Groq</td></tr>
+                            <tr><td><code>Mistral</code></td><td>Mistral Codestral (coding)</td></tr>
+                            <tr><td><code>Websearch</code></td><td>Tavily web search + Groq</td></tr>
                         </table>
                         <div class="note">The Ask: prefix is stripped before sending to the AI.</div>
                     </div>
 
+                    <div class="cmd-entry" id="cmd-date">
+                        <h3><span class="cmd">Date</span></h3>
+                        <p>Displays the current date.</p>
+                        <ul>
+                            <li><strong>Usage:</strong> Type <code>Date</code> or <code>Date:</code> and press Ask.</li>
+                            <li><strong>Example output:</strong> Monday, 24 February 2026</li>
+                        </ul>
+                    </div>
+
+                    <div class="cmd-entry" id="cmd-device">
+                        <h3><span class="cmd">Device</span></h3>
+                        <p>Displays detailed information about the current device and browser.</p>
+                        <ul>
+                            <li><strong>Usage:</strong> Type <code>Device</code> or <code>Device:</code> and press Ask.</li>
+                            <li>Shows OS, browser version, device type, screen resolution, CPU cores, RAM, storage, connection type, bandwidth, latency, language, dark mode, and touch support.</li>
+                            <li>RAM is only available in Chrome/Edge. Storage quota is an estimate.</li>
+                        </ul>
+                    </div>
+
                     <div class="cmd-entry" id="cmd-find">
                         <h3><span class="cmd">Find:</span></h3>
-                        <p>Searches for files and folders by name within the current root folder.</p>
+                        <p>Searches for files and folders by name within the current root folder. Supports optional sub-argument filters.</p>
                         <ul>
-                            <li><strong>Usage:</strong> <code>Find: filename</code></li>
-                            <li><strong>Example:</strong> <code>Find: server.js</code></li>
+                            <li><strong>Basic usage:</strong> <code>Find: filename</code></li>
+                            <li><strong>With filters:</strong> <code>Find: filename Ext: pdf From: last month To: today</code></li>
                             <li>Case-insensitive. Returns up to 200 results with full relative paths.</li>
-                            <li>If no access granted, automatically runs <code>Access:</code> first.</li>
+                            <li>If no access granted, automatically runs Access first.</li>
+                        </ul>
+                        <table>
+                            <tr><th>Sub-argument</th><th>Purpose</th><th>Example</th></tr>
+                            <tr><td><code>Ext:</code></td><td>Filter by file extension</td><td><code>Ext: pdf</code></td></tr>
+                            <tr><td><code>From:</code></td><td>Modified on or after this date</td><td><code>From: last month</code></td></tr>
+                            <tr><td><code>To:</code></td><td>Modified on or before this date</td><td><code>To: today</code></td></tr>
+                        </table>
+                        <p>Supported natural date values: <code>today</code>, <code>yesterday</code>, <code>last week</code>, <code>last month</code>, <code>last year</code>, or any specific date (e.g. <code>1 Jan 2025</code>).</p>
+                        <div class="note">Date filters apply to files only — folders have no reliable modified date via the browser File System API.</div>
+                    </div>
+
+                    <div class="cmd-entry" id="cmd-history">
+                        <h3><span class="cmd">History</span></h3>
+                        <p>Displays your past conversation sessions from the database.</p>
+                        <ul>
+                            <li><strong>Usage:</strong> Type <code>History</code> or <code>History:</code> and press Ask.</li>
+                            <li>Sessions are grouped by 30-minute gaps and listed with title and date.</li>
+                            <li>Click a session to open it. Right-click for options: Open chat, Copy summary, Copy full chat, Copy as context.</li>
                         </ul>
                     </div>
 
                     <div class="cmd-entry" id="cmd-list">
-                        <h3><span class="cmd">List:</span></h3>
-                        <p>Lists the contents of the current root folder.</p>
+                        <h3><span class="cmd">List</span></h3>
+                        <p>Lists the top-level contents of the current root folder.</p>
                         <ul>
-                            <li><strong>Usage:</strong> Type <code>List:</code> and press Ask.</li>
-                            <li>If no access granted, automatically runs <code>Access:</code> first.</li>
+                            <li><strong>Usage:</strong> Type <code>List</code> or <code>List:</code> and press Ask.</li>
+                            <li>If no access granted, automatically runs Access first.</li>
                         </ul>
                     </div>
 
-                    <div class="cmd-entry" id="cmd-history">
-                        <h3><span class="cmd">History:</span></h3>
-                        <p>Displays your past conversation sessions from the database.</p>
+                    <div class="cmd-entry" id="cmd-location">
+                        <h3><span class="cmd">Location</span></h3>
+                        <p>Displays your current location based on IP geolocation.</p>
                         <ul>
-                            <li><strong>Usage:</strong> Type <code>History:</code> and press Ask.</li>
-                            <li>Sessions are grouped by time and listed with title and date.</li>
-                            <li>Right-click a session for: Open chat, Copy summary, Copy full chat, Copy as context.</li>
+                            <li><strong>Usage:</strong> Type <code>Location</code> or <code>Location:</code> and press Ask.</li>
+                            <li><strong>Example output:</strong> Perth, Western Australia, Australia (AU) · Timezone: Australia/Perth</li>
+                            <li>Uses ipapi.co. Accuracy depends on your ISP — VPNs will show the VPN location.</li>
+                        </ul>
+                    </div>
+
+                    <div class="cmd-entry" id="cmd-time">
+                        <h3><span class="cmd">Time</span></h3>
+                        <p>Displays the current local time.</p>
+                        <ul>
+                            <li><strong>Usage:</strong> Type <code>Time</code> or <code>Time:</code> and press Ask.</li>
+                            <li><strong>Example output:</strong> 3:45 PM</li>
                         </ul>
                     </div>
 
@@ -329,14 +387,15 @@
         <div class="page" id="page-10">
             <div class="page-inner">
                 <h2>10. Google Integration</h2>
-                <p>Mobius can connect to your Google account to access Drive, Gmail, Calendar, and Tasks. Once connected, Mobius automatically routes relevant queries based on trigger phrases:</p>
+                <p>Mobius can connect to your Google account to access Drive, Gmail, Calendar, and Tasks. To route a query to a Google service, use the <code>Ask:</code> command with the service name:</p>
                 <table>
-                    <tr><th>Service</th><th>Trigger phrases</th></tr>
-                    <tr><td>Drive</td><td>"drive", "my files", "google drive"</td></tr>
-                    <tr><td>Tasks</td><td>"task", "todo", "to-do"</td></tr>
-                    <tr><td>Calendar</td><td>"calendar", "schedule", "events"</td></tr>
-                    <tr><td>Gmail</td><td>"email", "gmail", "inbox"</td></tr>
+                    <tr><th>Command</th><th>Service</th></tr>
+                    <tr><td><code>Ask: google_drive</code></td><td>Google Drive file listing</td></tr>
+                    <tr><td><code>Ask: google_tasks</code></td><td>Google Tasks</td></tr>
+                    <tr><td><code>Ask: google_calendar</code></td><td>Google Calendar events</td></tr>
+                    <tr><td><code>Ask: google_gmail</code></td><td>Gmail inbox</td></tr>
                 </table>
+                <div class="note">Google routing is explicit — use the Ask: command above. Mobius no longer guesses from keywords in your query.</div>
             </div>
         </div>
 
@@ -365,10 +424,13 @@
                 <ul>
                     <li>Use <strong>Ctrl+Enter</strong> to trigger Ask without clicking the button.</li>
                     <li>The query preview box shows exactly what Mobius will send — check it before the second Ask.</li>
-                    <li><code>Access:</code> only needs to be run once per browser — permission is remembered.</li>
-                    <li>Run <code>Access:</code> again to change to a different root folder.</li>
+                    <li>Single-word commands (<code>Date</code>, <code>Time</code>, <code>Location</code>, <code>Device</code>, <code>Access</code>, <code>List</code>, <code>History</code>) work without a colon — just type the word and press Ask.</li>
+                    <li>Switch AI models with <code>Ask: Gemini</code> — Mobius remembers your choice for all future queries.</li>
+                    <li>If a model fails, Mobius automatically falls back through the chain (Groq → Gemini → Mistral) and shows which model was actually used.</li>
+                    <li><code>Access</code> only needs to be run once per browser — permission is remembered via IndexedDB.</li>
+                    <li>Run <code>Access</code> again to change to a different root folder.</li>
+                    <li>Use <code>Find: report Ext: pdf From: last month</code> to narrow file searches by type and date.</li>
                     <li>Use <strong>Copy as context</strong> from chat history to carry a previous session into a new query.</li>
-                    <li>Use <code>Find:</code> to locate a file, then attach it manually with the <strong>+</strong> button.</li>
                 </ul>
             </div>
         </div>
