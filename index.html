@@ -519,31 +519,76 @@
             if (!userId) { window.location.href = '/login'; return; }
 
             const text = document.getElementById('input').value.trim();
-            if (!text && !pendingMobiusQuery) return;
 
-            // ── Step 1: Intercept all non-AI commands immediately ─────────────
-            // Access: needs special handling (synchronous user gesture for mobile)
-            const detected = detectCommand(text);
-            if (detected && detected.command === 'access') {
-                const { outputFn } = runCommandInPanel(text, 'access', '');
-                await handleAccess(outputFn);
+            // ── Pending query confirmation (second Ask press) ─────────────────
+            if (!text && pendingMobiusQuery) { await executeQuery(userId); return; }
+            if (!text) return;
+
+            // ── Action Layer ──────────────────────────────────────────────────
+            const action = resolveAction(text, mobiusContext);
+
+            if (action.type === 'command') {
+                if (action.command === 'access') {
+                    // Access: needs synchronous user gesture for mobile
+                    const { outputFn } = runCommandInPanel(text, 'access', '');
+                    await handleAccess(outputFn);
+                    return;
+                }
+                if (action.command === 'ask') {
+                    // Ask: ModelName — extract model and route directly to AI
+                    const model = getAskModel(text) || 'groq';
+                    const cleanText = text.replace(/^Ask:\s*\w+[.,]?\s*/i, '').trim() || text;
+                    pendingMobiusQuery = {
+                        ASK: model,
+                        INSTRUCTIONS: [...chatHistory],
+                        QUERY: cleanText,
+                        FILES: [...attachedFiles],
+                        CONTEXT: mobiusContext || ''
+                    };
+                    await executeQuery(userId);
+                    return;
+                }
+                // All other commands — execute locally, no AI
+                const { outputFn } = runCommandInPanel(text, action.command, action.args);
+                await runCommand(action.command, action.args, outputFn);
                 return;
             }
-            // All other non-AI commands
-            if (detected && detected.command !== 'ask') {
-                const { outputFn } = runCommandInPanel(text, detected.command, detected.args);
-                await runCommand(detected.command, detected.args, outputFn);
+
+            if (action.type === 'local') {
+                // Answer from client context — no server call at all
+                const panel = document.getElementById('chatPanel');
+                addDivider();
+                const entry = document.createElement('div');
+                entry.className = 'chat-entry';
+                entry.innerHTML = `
+                    <div class="chat-query">Q: ${escapeHtml(text)}</div>
+                    <div class="chat-label">A:(Local)</div>
+                    <div class="chat-answer">${escapeHtml(action.answer)}</div>`;
+                panel.appendChild(entry);
+                document.getElementById('input').value = '';
+                scrollToBottom();
                 return;
             }
 
-            // ── Step 2: Pending query confirmation ────────────────────────────
-            if (pendingMobiusQuery) {
+            if (action.type === 'google') {
+                // Route directly to Google API — skip /parse
+                pendingMobiusQuery = {
+                    ASK: action.model,
+                    INSTRUCTIONS: [...chatHistory],
+                    QUERY: text,
+                    FILES: [...attachedFiles],
+                    CONTEXT: mobiusContext || ''
+                };
                 await executeQuery(userId);
                 return;
             }
 
-            // ── Step 3: Build query via /parse ────────────────────────────────
-            await parseQuery(userId);
+            // ── AI query — build via /parse then confirm ──────────────────────
+            if (pendingMobiusQuery) {
+                await executeQuery(userId);
+            } else {
+                await parseQuery(userId);
+            }
         }
 
         async function parseQuery(userId) {
@@ -681,6 +726,7 @@
         if (window.location.search.includes('google=connected')) history.replaceState({}, '', '/');
     </script>
 
+    <script src="actions.js"></script>
     <script src="commands.js"></script>
     <script>
         if ('serviceWorker' in navigator) {
