@@ -150,7 +150,7 @@ async function handleList(args, output) {
 async function handleChatHistory(output) {
   output('Loading chat history...');
   try {
-    const userId = localStorage.getItem('mobius_user_id');
+    const userId = (typeof getAuth === 'function' ? getAuth('mobius_user_id') : null) || localStorage.getItem('mobius_user_id');
     const res = await fetch('/api/chat-history?userId=' + userId);
     const data = await res.json();
     if (window.renderChatHistoryList) {
