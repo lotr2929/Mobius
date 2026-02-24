@@ -142,7 +142,6 @@ async function handleDevice(args, output) {
   const nav = navigator;
   const lines = ['🖥️  Device Information'];
 
-  // OS detection with Windows build hint
   let os =
     /Windows NT 10/.test(ua)   ? 'Windows 10/11' :
     /Windows NT 6\.3/.test(ua) ? 'Windows 8.1' :
@@ -151,14 +150,12 @@ async function handleDevice(args, output) {
     /iPhone|iPad/.test(ua)     ? 'iOS ' + (ua.match(/OS ([\d_]+)/)?.[1]?.replace(/_/g,'.') || '') :
     /Linux/.test(ua)           ? 'Linux' : 'Unknown';
 
-  // Try userAgentData for architecture and platform detail (Chromium-based)
   let arch = '';
   if (nav.userAgentData) {
     try {
       const hi = await nav.userAgentData.getHighEntropyValues(['architecture','bitness','platformVersion','model']);
       if (hi.architecture) arch = hi.architecture + (hi.bitness ? '-bit' : '');
       if (hi.model)        lines.push('Device model: ' + hi.model);
-      // Windows 11 = platformVersion major >= 13
       if (/Windows/.test(os) && hi.platformVersion) {
         const major = parseInt(hi.platformVersion.split('.')[0]);
         if (major >= 13) os = 'Windows 11';
@@ -180,14 +177,12 @@ async function handleDevice(args, output) {
   const isTablet = /iPad|Tablet/.test(ua) || (isMobile && Math.min(screen.width, screen.height) > 600);
   lines.push('Device type: ' + (isTablet ? 'Tablet' : isMobile ? 'Mobile' : 'Desktop'));
   lines.push('Screen: ' + screen.width + '\xd7' + screen.height + ' (' + window.devicePixelRatio + '\xd7 DPR)');
-
   lines.push('Color depth: ' + screen.colorDepth + '-bit');
   lines.push('Orientation: ' + (screen.orientation?.type || 'unknown'));
 
   if (nav.hardwareConcurrency) lines.push('CPU cores: ' + nav.hardwareConcurrency);
   if (nav.deviceMemory)        lines.push('RAM: ~' + nav.deviceMemory + ' GB');
 
-  // GPU via WebGL
   try {
     const canvas = document.createElement('canvas');
     const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
@@ -219,9 +214,7 @@ async function handleDevice(args, output) {
   lines.push('Language: ' + (nav.language || 'unknown'));
   lines.push('Dark mode: ' + (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'Yes' : 'No'));
   lines.push('Online: ' + (nav.onLine ? 'Yes' : 'No'));
-  const hasTouch = 'ontouchstart' in window ||
-    navigator.maxTouchPoints > 0 ||
-    navigator.msMaxTouchPoints > 0;
+  const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
   lines.push('Touch: ' + (hasTouch ? 'Yes (' + (navigator.maxTouchPoints || navigator.msMaxTouchPoints) + ' points)' : 'No'));
 
   document.getElementById('input').value = '';
@@ -359,6 +352,147 @@ async function handleList(args, output) {
   output('📁 "' + rootHandle.name + '" (' + entries.length + ' items):\n' + entries.join('\n'));
 }
 
+// ── Focus ─────────────────────────────────────────────────────────────────────
+// Focus: filename   — search whole Drive, show clickable list, copy chosen file to Mobius folder
+// Focus: add text   — append text to the Mobius copy, do NOT send to AI
+// Focus: update     — write Mobius copy back to the original file
+// Focus: end        — detach file
+
+let focusFile = null; // { id, name, mimeType, content, folderId, originalId }
+
+// Expose for index.html to attach file to mobius_query FILES
+window.getFocusFile = () => focusFile;
+
+// Called when user clicks a file in the Focus search results list
+window.focusSelectFile = async function(file, folderId, outputEl) {
+  const userId = getAuth('mobius_user_id');
+  outputEl.textContent = '📋 Copying "' + file.name + '" to Mobius folder...';
+  try {
+    const res  = await fetch('/api/focus/copy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, fileId: file.id, mimeType: file.mimeType, filename: file.name, folderId })
+    });
+    const data = await res.json();
+    if (data.error) { outputEl.textContent = '❌ Copy failed: ' + data.error; return; }
+    focusFile = { id: data.copy.id, name: data.copy.name, mimeType: 'text/plain', content: data.copy.content, folderId, originalId: file.id };
+    outputEl.textContent =
+      '🟢 Focused on: ' + focusFile.name + '\n' +
+      (focusFile.content ? '📝 Current content:\n' + focusFile.content : '📄 File is empty.') + '\n\n' +
+      'File will be attached to all AI queries this session.\n' +
+      'Use "Focus: add [text]" to append entries.\n' +
+      'Use "Focus: update" to write back to the original.\n' +
+      'Use "Focus: end" to detach.';
+  } catch (err) { outputEl.textContent = '❌ ' + err.message; }
+};
+
+async function handleFocus(args, output, outputEl) {
+  const userId = getAuth('mobius_user_id');
+  if (!userId) { output('❌ Not logged in.'); return; }
+
+  const trimmed = args.trim();
+
+  // Focus: end
+  if (trimmed.toLowerCase() === 'end') {
+    focusFile = null;
+    document.getElementById('input').value = '';
+    output('🔴 Focus ended. File detached from queries.');
+    return;
+  }
+
+  // Focus: update — write Mobius copy back to original
+  if (trimmed.toLowerCase() === 'update') {
+    if (!focusFile) { output('❌ No file in focus.'); return; }
+    if (!focusFile.originalId) { output('❌ No original file to update (file was created in Mobius folder).'); return; }
+    output('🔄 Updating original file...');
+    try {
+      const res  = await fetch('/api/focus/update-original', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, originalFileId: focusFile.originalId, content: focusFile.content })
+      });
+      const data = await res.json();
+      if (data.error) { output('❌ Update failed: ' + data.error); return; }
+      document.getElementById('input').value = '';
+      output('✅ Original file updated successfully.');
+    } catch (err) { output('❌ ' + err.message); }
+    return;
+  }
+
+  // Focus: add [text] — append to Mobius copy, no AI
+  if (trimmed.toLowerCase().startsWith('add ') || trimmed.toLowerCase() === 'add') {
+    if (!focusFile) { output('❌ No file in focus. Use Focus: filename first.'); return; }
+    const text = trimmed.slice(4).trim();
+    if (!text) { output('Usage: Focus: add [your text here]'); return; }
+    output('💾 Saving to "' + focusFile.name + '"...');
+    try {
+      const res  = await fetch('/api/focus/append', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, fileId: focusFile.id, text })
+      });
+      const data = await res.json();
+      if (data.error) { output('❌ Save failed: ' + data.error); return; }
+      focusFile.content = data.content;
+      document.getElementById('input').value = '';
+      output('✅ Saved to "' + focusFile.name + '".');
+    } catch (err) { output('❌ ' + err.message); }
+    return;
+  }
+
+  // Focus: filename — search whole Drive
+  const filename = trimmed;
+  if (!filename) { output('Usage: Focus: filename  |  Focus: add [text]  |  Focus: update  |  Focus: end'); return; }
+
+  output('🔍 Searching Drive for "' + filename + '"...');
+
+  try {
+    const findRes  = await fetch('/api/focus/find', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, filename })
+    });
+    const findData = await findRes.json();
+    if (findData.error) { output('❌ ' + findData.error); return; }
+
+    if (findData.files.length === 0) {
+      // Not found — create new in Mobius folder
+      output('📄 Not found. Creating "' + filename + '.md" in Mobius folder...');
+      const createRes  = await fetch('/api/focus/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, filename, folderId: findData.folderId })
+      });
+      const createData = await createRes.json();
+      if (createData.error) { output('❌ ' + createData.error); return; }
+      focusFile = { id: createData.file.id, name: createData.file.name, mimeType: 'text/plain', content: '', folderId: findData.folderId, originalId: null };
+      document.getElementById('input').value = '';
+      output('🟢 Focused on new file: ' + focusFile.name + '\n📄 File is empty.\n\nUse "Focus: add [text]" to add content.\nUse "Focus: end" to detach.');
+      return;
+    }
+
+    if (findData.files.length === 1) {
+      // Single match — go straight to copy
+      await window.focusSelectFile(findData.files[0], findData.folderId, outputEl);
+      document.getElementById('input').value = '';
+      return;
+    }
+
+    // Multiple matches — show clickable list
+    document.getElementById('input').value = '';
+    if (outputEl) {
+      outputEl.innerHTML = '📋 Found ' + findData.files.length + ' files. Tap to select:<br><br>' +
+        findData.files.map((f, i) => {
+          const safeId = 'focus-file-' + i;
+          return '<div id="' + safeId + '" style="cursor:pointer;padding:6px 10px;margin-bottom:4px;background:#ede5d4;border:1px solid #c9bfae;border-radius:1px;" ' +
+            'onmouseover="this.style.background=\'#d9cfbc\'" onmouseout="this.style.background=\'#ede5d4\'" ' +
+            'onclick="window.focusSelectFile(' + JSON.stringify(f).replace(/"/g, '&quot;') + ', \'' + findData.folderId + '\', document.getElementById(\'' + safeId + '\').closest(\'.mq-block\'))">' +
+            '📄 ' + f.name + '</div>';
+        }).join('');
+    }
+  } catch (err) { output('❌ ' + err.message); }
+}
+
 // ── Chat History ──────────────────────────────────────────────────────────────
 
 async function handleChatHistory(args, output) {
@@ -390,6 +524,7 @@ const COMMANDS = {
   'find':     { requiresAccess: true,  isAI: false, handler: handleFind },
   'list':     { requiresAccess: true,  isAI: false, handler: handleList },
   'history':  { requiresAccess: false, isAI: false, handler: handleChatHistory },
+  'focus':    { requiresAccess: false, isAI: false, handler: handleFocus },
   'ask':      { requiresAccess: false, isAI: true },
 };
 
@@ -415,10 +550,10 @@ function detectCommand(text) {
   return { command, args: match[2].trim() };
 }
 
-async function runCommand(command, args, outputFn) {
+async function runCommand(command, args, outputFn, outputEl) {
   const cmd = COMMANDS[command];
   if (!cmd || cmd.isAI) return false;
-  await cmd.handler(args, outputFn);
+  await cmd.handler(args, outputFn, outputEl);
   return true;
 }
 

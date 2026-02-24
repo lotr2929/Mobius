@@ -97,11 +97,12 @@
 
         /* Chat panel */
         #chatPanel {
-            margin-top: 6px;
-            padding: 8px;
+            margin-top: 16px;
+            margin-bottom: 60px;
+            padding: 16px;
             background: #e2dccd;
             border-radius: 1px;
-            max-height: calc(100vh - 220px);
+            max-height: calc(100vh - 280px);
             overflow-y: auto;
         }
         .chat-entry { margin-bottom: 4px; }
@@ -510,7 +511,7 @@
             panel.appendChild(entry);
             scrollToBottom();
             const outputFn = msg => { output.textContent = msg; scrollToBottom(); };
-            return { outputFn };
+            return { outputFn, outputEl: output };
         }
 
         // ── Main Ask handler ──────────────────────────────────────────────────
@@ -531,8 +532,8 @@
             }
             // All other non-AI commands
             if (detected && detected.command !== 'ask') {
-                const { outputFn } = runCommandInPanel(text, detected.command, detected.args);
-                await runCommand(detected.command, detected.args, outputFn);
+                const { outputFn, outputEl } = runCommandInPanel(text, detected.command, detected.args);
+                await runCommand(detected.command, detected.args, outputFn, outputEl);
                 return;
             }
 
@@ -585,6 +586,17 @@
                 const data = await res.json();
                 pendingMobiusQuery = data.mobius_query;
                 pendingMobiusQuery.FILES = [...attachedFiles];
+                // Attach focused file content if active
+                if (window.getFocusFile && window.getFocusFile()) {
+                    const ff = window.getFocusFile();
+                    const focusAttachment = {
+                        name: ff.name,
+                        mimeType: 'text/plain',
+                        base64: btoa(unescape(encodeURIComponent(ff.content || ''))),
+                        size: ff.content ? ff.content.length : 0
+                    };
+                    pendingMobiusQuery.FILES.unshift(focusAttachment);
+                }
                 if (attachedFiles.some(f => f.mimeType?.startsWith('image/'))) {
                     pendingMobiusQuery.ASK = 'gemini';
                 }

@@ -1,8 +1,9 @@
+import 'dotenv/config';
 import express from 'express';
 import fetch from 'node-fetch';
 import { createClient } from '@supabase/supabase-js';
 import { google } from 'googleapis';
-import { getDriveFiles, getTasks, getCalendarEvents, getEmails, getGoogleClient, getGoogleAccountInfo } from './google_api.js';
+import { getDriveFiles, getTasks, getCalendarEvents, getEmails, getGoogleClient, getGoogleAccountInfo, findDriveFile, readDriveFileContent, createDriveFile, appendDriveFileContent, copyToMobiusFolder, updateOriginalFile } from './google_api.js';
 import multer from 'multer';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
@@ -338,6 +339,74 @@ app.post('/ask', async (req, res) => {
     res.json({ reply, modelUsed });
   } catch (err) {
     console.error('Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Focus routes ──────────────────────────────────────────────────────────────
+
+app.post('/api/focus/find', async (req, res) => {
+  const { userId, filename } = req.body;
+  if (!userId || !filename) return res.status(400).json({ error: 'userId and filename required' });
+  try {
+    const files = await findDriveFile(userId, filename);
+    res.json({ files });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/focus/create', async (req, res) => {
+  const { userId, filename } = req.body;
+  if (!userId || !filename) return res.status(400).json({ error: 'userId and filename required' });
+  try {
+    const file = await createDriveFile(userId, filename);
+    res.json({ file });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/focus/read', async (req, res) => {
+  const { userId, fileId, mimeType } = req.body;
+  if (!userId || !fileId) return res.status(400).json({ error: 'userId and fileId required' });
+  try {
+    const content = await readDriveFileContent(userId, fileId, mimeType || 'text/plain');
+    res.json({ content });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/focus/copy', async (req, res) => {
+  const { userId, fileId, mimeType, filename, folderId } = req.body;
+  if (!userId || !fileId) return res.status(400).json({ error: 'userId and fileId required' });
+  try {
+    const copy = await copyToMobiusFolder(userId, fileId, mimeType, filename, folderId);
+    res.json({ copy });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/focus/update-original', async (req, res) => {
+  const { userId, originalFileId, content } = req.body;
+  if (!userId || !originalFileId) return res.status(400).json({ error: 'userId and originalFileId required' });
+  try {
+    await updateOriginalFile(userId, originalFileId, content);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/focus/append', async (req, res) => {
+  const { userId, fileId, text } = req.body;
+  if (!userId || !fileId || !text) return res.status(400).json({ error: 'userId, fileId and text required' });
+  try {
+    const content = await appendDriveFileContent(userId, fileId, text);
+    res.json({ content });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });

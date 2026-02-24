@@ -125,6 +125,115 @@ export async function getEmails(userId) {
   }).join('\n');
 }
 
+// ── Focus: Read file content ────────────────────────────────────────────────
+
+// Get or create the Mobius folder in Drive
+async function getMobiusFolderId(drive) {
+  const res = await drive.files.list({
+    q: "name = 'Mobius' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+    fields: 'files(id)',
+    pageSize: 1
+  });
+  if (res.data.files.length > 0) return res.data.files[0].id;
+  // Create it
+  const created = await drive.files.create({
+    requestBody: { name: 'Mobius', mimeType: 'application/vnd.google-apps.folder' },
+    fields: 'id'
+  });
+  return created.data.id;
+}
+
+export async function findDriveFile(userId, filename) {
+  const client = await getGoogleClient(userId);
+  const drive = google.drive({ version: 'v3', auth: client });
+  const folderId = await getMobiusFolderId(drive);
+  // Search whole Drive, case-insensitive (Drive `name contains` is case-insensitive by default)
+  const safe = filename.replace(/'/g, "\\'");
+  const res = await drive.files.list({
+    q: `name contains '${safe}' and trashed = false and mimeType != 'application/vnd.google-apps.folder'`,
+    fields: 'files(id, name, mimeType, parents)',
+    pageSize: 20
+  });
+  return { files: res.data.files || [], folderId };
+}
+
+export async function copyToMobiusFolder(userId, fileId, mimeType, filename, folderId) {
+  const client = await getGoogleClient(userId);
+  const drive = google.drive({ version: 'v3', auth: client });
+  // Read original content
+  let content = '';
+  try {
+    if (mimeType === 'application/vnd.google-apps.document') {
+      const res = await drive.files.export({ fileId, mimeType: 'text/plain' });
+      content = res.data || '';
+    } else {
+      const res = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'text' });
+      content = res.data || '';
+    }
+  } catch { /* empty or unreadable */ }
+  // Create copy in Mobius folder
+  const copyName = filename.replace(/\.[^.]+$/, '') + '.md';
+  const created = await drive.files.create({
+    requestBody: { name: copyName, mimeType: 'text/plain', parents: [folderId] },
+    media: { mimeType: 'text/plain', body: content },
+    fields: 'id, name'
+  });
+  return { id: created.data.id, name: created.data.name, content };
+}
+
+export async function updateOriginalFile(userId, originalFileId, content) {
+  const client = await getGoogleClient(userId);
+  const drive = google.drive({ version: 'v3', auth: client });
+  await drive.files.update({
+    fileId: originalFileId,
+    media: { mimeType: 'text/plain', body: content }
+  });
+}
+
+export async function readDriveFileContent(userId, fileId, mimeType) {
+  const client = await getGoogleClient(userId);
+  const drive = google.drive({ version: 'v3', auth: client });
+  if (mimeType === 'application/vnd.google-apps.document') {
+    const res = await drive.files.export({ fileId, mimeType: 'text/plain' });
+    return res.data;
+  }
+  const res = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'text' });
+  return res.data;
+}
+
+export async function createDriveFile(userId, filename, folderId) {
+  const client = await getGoogleClient(userId);
+  const drive = google.drive({ version: 'v3', auth: client });
+  const resolvedFolder = folderId || await getMobiusFolderId(drive);
+  const res = await drive.files.create({
+    requestBody: {
+      name: filename + '.md',
+      mimeType: 'text/plain',
+      parents: [resolvedFolder]
+    },
+    media: { mimeType: 'text/plain', body: '' },
+    fields: 'id, name'
+  });
+  return res.data;
+}
+
+export async function appendDriveFileContent(userId, fileId, newText) {
+  const client = await getGoogleClient(userId);
+  const drive = google.drive({ version: 'v3', auth: client });
+  let existing = '';
+  try {
+    const res = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'text' });
+    existing = res.data || '';
+  } catch { /* empty file */ }
+  const timestamp = new Date().toLocaleString('en-AU');
+  const updated = existing + (existing ? '\n\n' : '') + `[${timestamp}]\n${newText}`;
+  await drive.files.update({
+    fileId,
+    media: { mimeType: 'text/plain', body: updated }
+  });
+  return updated;
+}
+
 // ── Google Account Info ───────────────────────────────────────────────────────
 
 export async function getGoogleAccountInfo(userId) {
