@@ -121,14 +121,32 @@ async function handleDevice(args, output) {
   const nav = navigator;
   const lines = ['🖥️  Device Information'];
 
-  const os =
+  // OS detection with Windows build hint
+  let os =
     /Windows NT 10/.test(ua)   ? 'Windows 10/11' :
     /Windows NT 6\.3/.test(ua) ? 'Windows 8.1' :
     /Mac OS X/.test(ua)        ? 'macOS ' + (ua.match(/Mac OS X ([\d_]+)/)?.[1]?.replace(/_/g,'.') || '') :
     /Android/.test(ua)         ? 'Android ' + (ua.match(/Android ([\d.]+)/)?.[1] || '') :
     /iPhone|iPad/.test(ua)     ? 'iOS ' + (ua.match(/OS ([\d_]+)/)?.[1]?.replace(/_/g,'.') || '') :
     /Linux/.test(ua)           ? 'Linux' : 'Unknown';
+
+  // Try userAgentData for architecture and platform detail (Chromium-based)
+  let arch = '';
+  if (nav.userAgentData) {
+    try {
+      const hi = await nav.userAgentData.getHighEntropyValues(['architecture','bitness','platformVersion','model']);
+      if (hi.architecture) arch = hi.architecture + (hi.bitness ? '-bit' : '');
+      if (hi.model)        lines.push('Device model: ' + hi.model);
+      // Windows 11 = platformVersion major >= 13
+      if (/Windows/.test(os) && hi.platformVersion) {
+        const major = parseInt(hi.platformVersion.split('.')[0]);
+        if (major >= 13) os = 'Windows 11';
+        else if (major > 0) os = 'Windows 10';
+      }
+    } catch { /* high entropy not granted */ }
+  }
   lines.push('OS: ' + os);
+  if (arch) lines.push('Architecture: ' + arch);
 
   const browser =
     /Edg\//.test(ua)     ? 'Edge '    + (ua.match(/Edg\/([\d.]+)/)?.[1]    || '') :
@@ -142,8 +160,26 @@ async function handleDevice(args, output) {
   lines.push('Device type: ' + (isTablet ? 'Tablet' : isMobile ? 'Mobile' : 'Desktop'));
   lines.push('Screen: ' + screen.width + '\xd7' + screen.height + ' (' + window.devicePixelRatio + '\xd7 DPR)');
 
+  lines.push('Color depth: ' + screen.colorDepth + '-bit');
+  lines.push('Orientation: ' + (screen.orientation?.type || 'unknown'));
+
   if (nav.hardwareConcurrency) lines.push('CPU cores: ' + nav.hardwareConcurrency);
   if (nav.deviceMemory)        lines.push('RAM: ~' + nav.deviceMemory + ' GB');
+
+  // GPU via WebGL
+  try {
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    if (gl) {
+      const dbgInfo = gl.getExtension('WEBGL_debug_renderer_info');
+      if (dbgInfo) {
+        const vendor   = gl.getParameter(dbgInfo.UNMASKED_VENDOR_WEBGL);
+        const renderer = gl.getParameter(dbgInfo.UNMASKED_RENDERER_WEBGL);
+        if (vendor)   lines.push('GPU vendor: ' + vendor);
+        if (renderer) lines.push('GPU: ' + renderer);
+      }
+    }
+  } catch { /* unavailable */ }
 
   try {
     const est   = await navigator.storage.estimate();
