@@ -129,6 +129,9 @@
             color: #3a2e22;
             margin-top: 6px;
         }
+        .mq-block.html-content {
+            white-space: normal;
+        }
         .mq-label { font-size: 12px; color: #a08060; margin-bottom: 4px; font-family: inherit; }
 
         /* Chat history list */
@@ -347,7 +350,10 @@
         function escapeHtml(t) {
             return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         }
-        function markdownToHtml(text) {
+        window.markdownToHtml = function markdownToHtml(text) {
+            // Normalise line endings
+            text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            // Tables
             text = text.replace(/\|(.+)\|\n\|[-| :]+\|\n((?:\|.+\|\n?)+)/g, (match, header, rows) => {
                 const ths = header.split('|').filter(s=>s.trim()).map(s=>`<th>${s.trim()}</th>`).join('');
                 const trs = rows.trim().split('\n').map(row => {
@@ -360,10 +366,12 @@
                 .replace(/### (.*$)/gim,'<h3>$1</h3>')
                 .replace(/## (.*$)/gim,'<h2>$1</h2>')
                 .replace(/# (.*$)/gim,'<h1>$1</h1>')
+                .replace(/^\* (.+)$/gim,'<li>$1</li>')  // bullet points before italic
                 .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
                 .replace(/\*(.+?)\*/g,'<em>$1</em>')
                 .replace(/```([^`]+)```/g,'<pre><code>$1</code></pre>')
                 .replace(/`([^`]+)`/g,'<code>$1</code>')
+                .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')  // wrap li in ul
                 .replace(/\n/g,'<br>');
         }
         function formatMobiusQuery(mq) {
@@ -503,7 +511,9 @@
             addDivider();
             const entry = document.createElement('div');
             entry.className = 'chat-entry';
-            entry.innerHTML = `<div class="chat-query">Q: ${escapeHtml(text)}</div>`;
+            const firstLine = text.split('\n')[0];
+            const restLines = text.split('\n').slice(1).join('\n');
+            entry.innerHTML = `<div class="chat-query">Q: ${escapeHtml(firstLine)}${restLines ? '<span style="font-weight:normal"> \n' + escapeHtml(restLines) + '</span>' : ''}</div>`;
             const output = document.createElement('div');
             output.className = 'mq-block';
             output.textContent = 'Running...';
@@ -557,8 +567,10 @@
             addDivider();
             const entry = document.createElement('div');
             entry.className = 'chat-entry';
+            const qFirst = text.split('\n')[0];
+            const qRest  = text.split('\n').slice(1).join('\n');
             entry.innerHTML = `
-                <div class="chat-query">Q: ${escapeHtml(text)}</div>
+                <div class="chat-query">Q: ${escapeHtml(qFirst)}${qRest ? '<span style="font-weight:normal"><br>' + escapeHtml(qRest) + '</span>' : ''}</div>
                 <div class="mq-label">▸ Mobius Query (press Ask to send)</div>`;
             const mqPreview = document.createElement('div');
             mqPreview.className = 'mq-block';

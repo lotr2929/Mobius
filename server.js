@@ -3,7 +3,7 @@ import express from 'express';
 import fetch from 'node-fetch';
 import { createClient } from '@supabase/supabase-js';
 import { google } from 'googleapis';
-import { getDriveFiles, getTasks, getCalendarEvents, getEmails, getGoogleClient, getGoogleAccountInfo, findDriveFile, readDriveFileContent, createDriveFile, appendDriveFileContent, copyToMobiusFolder, updateOriginalFile } from './google_api.js';
+import { getDriveFiles, getTasks, getCalendarEvents, getEmails, getGoogleClient, getGoogleAccountInfo, findDriveFile, readDriveFileContent, createDriveFile, writeDriveFileContent, copyToMobiusFolder, updateOriginalFile } from './google_api.js';
 import multer from 'multer';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
@@ -349,8 +349,8 @@ app.post('/api/focus/find', async (req, res) => {
   const { userId, filename } = req.body;
   if (!userId || !filename) return res.status(400).json({ error: 'userId and filename required' });
   try {
-    const files = await findDriveFile(userId, filename);
-    res.json({ files });
+    const { files, folderId } = await findDriveFile(userId, filename);
+    res.json({ files, folderId });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -401,11 +401,11 @@ app.post('/api/focus/update-original', async (req, res) => {
 });
 
 app.post('/api/focus/append', async (req, res) => {
-  const { userId, fileId, text } = req.body;
-  if (!userId || !fileId || !text) return res.status(400).json({ error: 'userId, fileId and text required' });
+  const { userId, fileId, content } = req.body;
+  if (!userId || !fileId || !content) return res.status(400).json({ error: 'userId, fileId and content required' });
   try {
-    const content = await appendDriveFileContent(userId, fileId, text);
-    res.json({ content });
+    await writeDriveFileContent(userId, fileId, content);
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

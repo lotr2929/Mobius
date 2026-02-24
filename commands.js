@@ -366,22 +366,39 @@ window.getFocusFile = () => focusFile;
 // Called when user clicks a file in the Focus search results list
 window.focusSelectFile = async function(file, folderId, outputEl) {
   const userId = getAuth('mobius_user_id');
-  outputEl.textContent = '📋 Copying "' + file.name + '" to Mobius folder...';
   try {
-    const res  = await fetch('/api/focus/copy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, fileId: file.id, mimeType: file.mimeType, filename: file.name, folderId })
-    });
-    const data = await res.json();
-    if (data.error) { outputEl.textContent = '❌ Copy failed: ' + data.error; return; }
-    focusFile = { id: data.copy.id, name: data.copy.name, mimeType: 'text/plain', content: data.copy.content, folderId, originalId: file.id };
-    outputEl.textContent =
-      '🟢 Focused on: ' + focusFile.name + '\n' +
-      (focusFile.content ? '📝 Current content:\n' + focusFile.content : '📄 File is empty.') + '\n\n' +
-      'File will be attached to all AI queries this session.\n' +
-      'Use "Focus: add [text]" to append entries.\n' +
-      'Use "Focus: update" to write back to the original.\n' +
+    if (file.inMobius) {
+      // Already in Mobius folder — read directly, no copy needed
+      outputEl.textContent = '📥 Loading "' + file.name + '"...';
+      const res  = await fetch('/api/focus/read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, fileId: file.id, mimeType: file.mimeType })
+      });
+      const data = await res.json();
+      if (data.error) { outputEl.textContent = '❌ Read failed: ' + data.error; return; }
+      focusFile = { id: file.id, name: file.name, mimeType: file.mimeType, content: data.content, folderId, originalId: null, path: file.path || null };
+    } else {
+      // Outside Mobius — copy in
+      outputEl.textContent = '📋 Copying "' + file.name + '" to Mobius folder...';
+      const res  = await fetch('/api/focus/copy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, fileId: file.id, mimeType: file.mimeType, filename: file.name, folderId })
+      });
+      const data = await res.json();
+      if (data.error) { outputEl.textContent = '❌ Copy failed: ' + data.error; return; }
+      focusFile = { id: data.copy.id, name: data.copy.name, mimeType: 'text/plain', content: data.copy.content, folderId, originalId: file.id, path: file.path || null };
+    }
+    const md = window.markdownToHtml || (t => t.replace(/\n/g, '<br>'));
+    outputEl.classList.add('html-content');
+    outputEl.innerHTML =
+      '🟢 Focused on: <strong>' + focusFile.name + '</strong>' +
+      (focusFile.path ? ' — <span style="font-size:12px;color:#8d7c64;">Path: ' + focusFile.path + '</span>' : '') + '<br>' +
+      (focusFile.content ? '📝 Current content:<br>' + md(focusFile.content) : '📄 File is empty.') + '<br><br>' +
+      'File will be attached to all AI queries this session.<br>' +
+      'Use "Focus: add [text]" to append entries.<br>' +
+      (focusFile.originalId ? 'Use "Focus: update" to write back to the original.<br>' : '') +
       'Use "Focus: end" to detach.';
   } catch (err) { outputEl.textContent = '❌ ' + err.message; }
 };
@@ -419,21 +436,25 @@ async function handleFocus(args, output, outputEl) {
     return;
   }
 
-  // Focus: add [text] — append to Mobius copy, no AI
-  if (trimmed.toLowerCase().startsWith('add ') || trimmed.toLowerCase() === 'add') {
+  // Focus: add [text] — append to Mobius copy in memory, then write full content to Drive
+  // Supports: 'add some text' or 'add\nmultiline text'
+  if (trimmed.toLowerCase().startsWith('add') && (trimmed.length === 3 || trimmed[3] === ' ' || trimmed[3] === '\n')) {
     if (!focusFile) { output('❌ No file in focus. Use Focus: filename first.'); return; }
-    const text = trimmed.slice(4).trim();
+    const text = trimmed.slice(3).replace(/^[\s\n]+/, '');
     if (!text) { output('Usage: Focus: add [your text here]'); return; }
     output('💾 Saving to "' + focusFile.name + '"...');
     try {
-      const res  = await fetch('/api/focus/append', {
+      // Build updated content in memory first
+      const timestamp = new Date().toLocaleString('en-AU');
+      const updated = (focusFile.content ? focusFile.content + '\n\n' : '') + '[' + timestamp + ']\n' + text;
+      const res = await fetch('/api/focus/append', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, fileId: focusFile.id, text })
+        body: JSON.stringify({ userId, fileId: focusFile.id, content: updated })
       });
       const data = await res.json();
       if (data.error) { output('❌ Save failed: ' + data.error); return; }
-      focusFile.content = data.content;
+      focusFile.content = updated;
       document.getElementById('input').value = '';
       output('✅ Saved to "' + focusFile.name + '".');
     } catch (err) { output('❌ ' + err.message); }
@@ -467,12 +488,14 @@ async function handleFocus(args, output, outputEl) {
       if (createData.error) { output('❌ ' + createData.error); return; }
       focusFile = { id: createData.file.id, name: createData.file.name, mimeType: 'text/plain', content: '', folderId: findData.folderId, originalId: null };
       document.getElementById('input').value = '';
-      output('🟢 Focused on new file: ' + focusFile.name + '\n📄 File is empty.\n\nUse "Focus: add [text]" to add content.\nUse "Focus: end" to detach.');
+      if (outputEl) {
+        outputEl.classList.add('html-content');
+        outputEl.innerHTML = '🟢 Focused on new file: <strong>' + focusFile.name + '</strong><br>📄 File is empty.<br><br>Use "Focus: add [text]" to add content.<br>Use "Focus: end" to detach.';
+      }
       return;
     }
 
     if (findData.files.length === 1) {
-      // Single match — go straight to copy
       await window.focusSelectFile(findData.files[0], findData.folderId, outputEl);
       document.getElementById('input').value = '';
       return;
@@ -484,10 +507,11 @@ async function handleFocus(args, output, outputEl) {
       outputEl.innerHTML = '📋 Found ' + findData.files.length + ' files. Tap to select:<br><br>' +
         findData.files.map((f, i) => {
           const safeId = 'focus-file-' + i;
+          const label = f.inMobius ? '📂 ' : '📄 '; // folder icon = already in Mobius
           return '<div id="' + safeId + '" style="cursor:pointer;padding:6px 10px;margin-bottom:4px;background:#ede5d4;border:1px solid #c9bfae;border-radius:1px;" ' +
             'onmouseover="this.style.background=\'#d9cfbc\'" onmouseout="this.style.background=\'#ede5d4\'" ' +
             'onclick="window.focusSelectFile(' + JSON.stringify(f).replace(/"/g, '&quot;') + ', \'' + findData.folderId + '\', document.getElementById(\'' + safeId + '\').closest(\'.mq-block\'))">' +
-            '📄 ' + f.name + '</div>';
+            label + f.name + (f.path ? ' <span style="font-size:11px;color:#8d7c64;">— Path: ' + f.path + '</span>' : '') + '</div>';
         }).join('');
     }
   } catch (err) { output('❌ ' + err.message); }

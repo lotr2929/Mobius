@@ -127,6 +127,26 @@ export async function getEmails(userId) {
 
 // ── Focus: Read file content ────────────────────────────────────────────────
 
+// Resolve a file's full path by walking up parent folders
+async function getFilePath(drive, fileId, fileName) {
+  const parts = [fileName];
+  let currentId = fileId;
+  for (let i = 0; i < 6; i++) { // max 6 levels deep
+    try {
+      const res = await drive.files.get({ fileId: currentId, fields: 'id, name, parents' });
+      const parents = res.data.parents;
+      if (!parents || parents.length === 0) break;
+      const parentId = parents[0];
+      const parentRes = await drive.files.get({ fileId: parentId, fields: 'id, name, parents' });
+      const parentName = parentRes.data.name;
+      if (parentName === 'My Drive' || !parentName) break;
+      parts.unshift(parentName);
+      currentId = parentId;
+    } catch { break; }
+  }
+  return '/' + parts.join('/');
+}
+
 // Get or create the Mobius folder in Drive
 async function getMobiusFolderId(drive) {
   const res = await drive.files.list({
@@ -147,14 +167,35 @@ export async function findDriveFile(userId, filename) {
   const client = await getGoogleClient(userId);
   const drive = google.drive({ version: 'v3', auth: client });
   const folderId = await getMobiusFolderId(drive);
-  // Search whole Drive, case-insensitive (Drive `name contains` is case-insensitive by default)
   const safe = filename.replace(/'/g, "\\'");
+
+  // Check Mobius folder first
+  const mobiusRes = await drive.files.list({
+    q: `'${folderId}' in parents and name contains '${safe}' and trashed = false`,
+    fields: 'files(id, name, mimeType, parents)',
+    pageSize: 10
+  });
+  const mobiusRaw = mobiusRes.data.files || [];
+  if (mobiusRaw.length > 0) {
+    const mobiusFiles = await Promise.all(mobiusRaw.map(async f => ({
+      ...f,
+      inMobius: true,
+      path: await getFilePath(drive, f.id, f.name)
+    })));
+    return { files: mobiusFiles, folderId };
+  }
+
+  // Fall back to whole Drive search
   const res = await drive.files.list({
     q: `name contains '${safe}' and trashed = false and mimeType != 'application/vnd.google-apps.folder'`,
     fields: 'files(id, name, mimeType, parents)',
     pageSize: 20
   });
-  return { files: res.data.files || [], folderId };
+  const allFiles = await Promise.all((res.data.files || []).map(async f => ({
+    ...f,
+    path: await getFilePath(drive, f.id, f.name)
+  })));
+  return { files: allFiles, folderId };
 }
 
 export async function copyToMobiusFolder(userId, fileId, mimeType, filename, folderId) {
@@ -217,21 +258,30 @@ export async function createDriveFile(userId, filename, folderId) {
   return res.data;
 }
 
-export async function appendDriveFileContent(userId, fileId, newText) {
+export async function writeDriveFileContent(userId, fileId, content) {
   const client = await getGoogleClient(userId);
-  const drive = google.drive({ version: 'v3', auth: client });
-  let existing = '';
-  try {
-    const res = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'text' });
-    existing = res.data || '';
-  } catch { /* empty file */ }
-  const timestamp = new Date().toLocaleString('en-AU');
-  const updated = existing + (existing ? '\n\n' : '') + `[${timestamp}]\n${newText}`;
-  await drive.files.update({
-    fileId,
-    media: { mimeType: 'text/plain', body: updated }
+  const tokenRes = await client.getAccessToken();
+  const accessToken = tokenRes.token;
+
+  const boundary = 'mobius_boundary';
+  const metadata = JSON.stringify({ mimeType: 'text/plain' });
+  const body = '--' + boundary + '\r\n' +
+    'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+    metadata + '\r\n' +
+    '--' + boundary + '\r\n' +
+    'Content-Type: text/plain\r\n\r\n' +
+    content + '\r\n' +
+    '--' + boundary + '--';
+
+  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files/' + fileId + '?uploadType=multipart', {
+    method: 'PATCH',
+    headers: {
+      Authorization: 'Bearer ' + accessToken,
+      'Content-Type': 'multipart/related; boundary=' + boundary
+    },
+    body
   });
-  return updated;
+  if (!res.ok) throw new Error('Drive write failed: ' + res.status + ' ' + await res.text());
 }
 
 // ── Google Account Info ───────────────────────────────────────────────────────
