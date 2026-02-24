@@ -114,6 +114,27 @@ async function handleLocation(args, output) {
   }
 }
 
+// ── Google ────────────────────────────────────────────────────────────────────
+
+async function handleGoogle(args, output) {
+  const userId = getAuth('mobius_user_id');
+  if (!userId) { output('❌ Not logged in.'); return; }
+  output('🔍 Fetching Google account info...');
+  try {
+    const res  = await fetch('/api/google/info?userId=' + encodeURIComponent(userId));
+    const data = await res.json();
+    if (data.error) { output('❌ ' + data.error); return; }
+    const lines = [
+      '🔗 Google Account',
+      'Name:  ' + data.name,
+      'Email: ' + data.email,
+    ];
+    output(lines.join('\n'));
+  } catch (err) {
+    output('❌ Failed to fetch Google info: ' + err.message);
+  }
+}
+
 // ── Device ────────────────────────────────────────────────────────────────────
 
 async function handleDevice(args, output) {
@@ -198,7 +219,10 @@ async function handleDevice(args, output) {
   lines.push('Language: ' + (nav.language || 'unknown'));
   lines.push('Dark mode: ' + (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'Yes' : 'No'));
   lines.push('Online: ' + (nav.onLine ? 'Yes' : 'No'));
-  lines.push('Touch: ' + ('ontouchstart' in window ? 'Yes' : 'No'));
+  const hasTouch = 'ontouchstart' in window ||
+    navigator.maxTouchPoints > 0 ||
+    navigator.msMaxTouchPoints > 0;
+  lines.push('Touch: ' + (hasTouch ? 'Yes (' + (navigator.maxTouchPoints || navigator.msMaxTouchPoints) + ' points)' : 'No'));
 
   document.getElementById('input').value = '';
   output(lines.join('\n'));
@@ -361,6 +385,7 @@ const COMMANDS = {
   'time':     { requiresAccess: false, isAI: false, handler: handleTime },
   'location': { requiresAccess: false, isAI: false, handler: handleLocation },
   'device':   { requiresAccess: false, isAI: false, handler: handleDevice },
+  'google':   { requiresAccess: false, isAI: false, handler: handleGoogle },
   'access':   { requiresAccess: false, isAI: false, handler: function(args, out) { return handleAccess(out); } },
   'find':     { requiresAccess: true,  isAI: false, handler: handleFind },
   'list':     { requiresAccess: true,  isAI: false, handler: handleList },
@@ -369,7 +394,7 @@ const COMMANDS = {
 };
 
 // Commands that work as a single word with no colon needed
-const SINGLE_WORD_COMMANDS = new Set(['date','time','location','device','access','list','history']);
+const SINGLE_WORD_COMMANDS = new Set(['date','time','location','device','access','list','history','google']);
 
 // ── Public API (called by index.html) ─────────────────────────────────────────
 

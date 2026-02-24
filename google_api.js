@@ -124,3 +124,16 @@ export async function getEmails(userId) {
     return `  ${i+1}. ${subject}\n     From: ${from}`;
   }).join('\n');
 }
+
+// ── Google Account Info ───────────────────────────────────────────────────────
+
+export async function getGoogleAccountInfo(userId) {
+  const client = await getGoogleClient(userId);
+  const oauth2 = google.oauth2({ version: 'v2', auth: client });
+  const res = await oauth2.userinfo.get();
+  return {
+    email:   res.data.email   || 'unknown',
+    name:    res.data.name    || 'unknown',
+    picture: res.data.picture || null
+  };
+}

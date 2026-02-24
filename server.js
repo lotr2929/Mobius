@@ -2,7 +2,7 @@ import express from 'express';
 import fetch from 'node-fetch';
 import { createClient } from '@supabase/supabase-js';
 import { google } from 'googleapis';
-import { getDriveFiles, getTasks, getCalendarEvents, getEmails, getGoogleClient } from './google_api.js';
+import { getDriveFiles, getTasks, getCalendarEvents, getEmails, getGoogleClient, getGoogleAccountInfo } from './google_api.js';
 import multer from 'multer';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
@@ -146,7 +146,9 @@ const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/drive',
   'https://www.googleapis.com/auth/gmail.modify',
   'https://www.googleapis.com/auth/calendar',
-  'https://www.googleapis.com/auth/tasks'
+  'https://www.googleapis.com/auth/tasks',
+  'https://www.googleapis.com/auth/userinfo.email',
+  'https://www.googleapis.com/auth/userinfo.profile'
 ];
 
 app.get('/auth/google', (req, res) => {
@@ -186,6 +188,20 @@ app.get('/auth/google/status', async (req, res) => {
     .single();
   res.json({ connected: !!data });
 });
+
+// ── Google Account Info endpoint ─────────────────────────────────────────────
+
+app.get("/api/google/info", async (req, res) => {
+  const { userId } = req.query;
+  if (!userId) return res.status(400).json({ error: "userId required" });
+  try {
+    const info = await getGoogleAccountInfo(userId);
+    res.json(info);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // ── Chat History ──────────────────────────────────────────────────────────────
 
