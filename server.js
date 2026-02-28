@@ -302,12 +302,35 @@ app.post('/ask', async (req, res) => {
     } else if (ASK === 'google_gmail') {
       reply = await getEmails(userId);
     } else if (ASK === 'gemini' || hasImages) {
-      // Route to Gemini if explicitly chosen or if images attached
-      reply = await askGemini(messages, imageParts);
-      modelUsed = 'gemini';
+      try {
+        reply = await askGemini(messages, imageParts);
+        modelUsed = 'gemini';
+      } catch (err) {
+        console.warn('[Mobius] Gemini failed, falling back to Mistral:', err.message);
+        try {
+          reply = await askMistral(messages);
+          modelUsed = 'mistral (fallback from gemini)';
+        } catch (err2) {
+          console.warn('[Mobius] Mistral also failed, falling back to Groq:', err2.message);
+          const { reply: fbReply, modelUsed: fbModel } = await askWithFallback(messages, [], 'groq');
+          reply = fbReply;
+          modelUsed = fbModel;
+        }
+      }
     } else if (ASK === 'mistral' || ASK === 'codestral') {
-      reply = await askMistral(messages);
-      modelUsed = 'mistral';
+      try {
+        reply = await askMistral(messages);
+        modelUsed = 'mistral';
+      } catch (err) {
+        console.warn('[Mobius] Mistral failed, falling back to Groq:', err.message);
+        try {
+          const { reply: fbReply, modelUsed: fbModel } = await askWithFallback(messages, [], 'groq');
+          reply = fbReply;
+          modelUsed = fbModel;
+        } catch (err2) {
+          throw new Error('All models failed. Last error: ' + err2.message);
+        }
+      }
     } else if (ASK === 'websearch') {
       // Append non-image file text to query if present
       if (hasNonImageFiles) {
@@ -328,9 +351,13 @@ app.post('/ask', async (req, res) => {
           .join('\n\n');
         messages[messages.length - 1].content += '\n\n' + fileTexts;
       }
-      const { reply: fallbackReply, modelUsed: fallbackModel } = await askWithFallback(messages, [], ASK);
-      reply = fallbackReply;
-      modelUsed = fallbackModel;
+      try {
+        const { reply: fallbackReply, modelUsed: fallbackModel } = await askWithFallback(messages, [], ASK);
+        reply = fallbackReply;
+        modelUsed = fallbackModel;
+      } catch (err) {
+        throw new Error('All models failed. Last error: ' + err.message);
+      }
     }
 
     if (userId && reply !== '__CHAT_HISTORY__') {
